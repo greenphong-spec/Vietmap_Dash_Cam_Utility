@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DashCam Merger – Software Specification</title><style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#57606a;--line:#d0d7de;--code:#f6f8fa;--accent:#0969da;--th:#eef2f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--line:#30363d;--code:#161b22;--accent:#58a6ff;--th:#1c2128}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{display:flex;min-height:100vh}
+nav{width:300px;flex:none;border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh;overflow:auto;font-size:13px}
+nav a{display:block;color:var(--fg);text-decoration:none;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav a:hover{color:var(--accent)}
+nav .l2{padding-left:0;font-weight:600;margin-top:6px}
+nav .l3{padding-left:14px}
+nav .l4{padding-left:28px;color:var(--muted)}
+main{flex:1;min-width:0;padding:24px 40px 80px;max-width:1100px}
+h1{font-size:28px;border-bottom:1px solid var(--line);padding-bottom:8px}
+h2{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:40px}
+h3{font-size:18px;margin-top:28px}
+h4{font-size:15px;margin-top:20px}
+code{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:0.9em;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow:auto;line-height:1.45}
+pre code{background:none;padding:0;font-size:12.5px}
+table{border-collapse:collapse;margin:12px 0;font-size:13.5px;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--line);padding:5px 9px;vertical-align:top;text-align:left}
+th{background:var(--th)}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+ul,ol{padding-left:26px}
+li{margin:3px 0}
+.meta{color:var(--muted)}
+@media (max-width:900px){.wrap{display:block}nav{position:static;width:auto;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:16px}}
+</style></head>
+<body><div class="wrap"><nav><strong>Contents</strong><a class="l2" href="#1-purpose">1. Purpose</a>
+<a class="l2" href="#2-goals-and-non-goals">2. Goals and non-goals</a>
+<a class="l3" href="#goals">Goals</a>
+<a class="l3" href="#non-goals-v1">Non-goals (v1)</a>
+<a class="l2" href="#3-users-and-usage-modes">3. Users and usage modes</a>
+<a class="l2" href="#4-technology-choice">4. Technology choice</a>
+<a class="l2" href="#5-functional-requirements">5. Functional requirements</a>
+<a class="l3" href="#fr-1-input-selection">FR-1 Input selection</a>
+<a class="l3" href="#fr-2-camera-detection">FR-2 Camera detection</a>
+<a class="l3" href="#fr-3-chronological-ordering">FR-3 Chronological ordering</a>
+<a class="l3" href="#fr-4-codec-consistency-check">FR-4 Codec consistency check</a>
+<a class="l3" href="#fr-5-concat-list-generation">FR-5 Concat list generation</a>
+<a class="l3" href="#fr-6-merge-execution">FR-6 Merge execution</a>
+<a class="l3" href="#fr-7-verification">FR-7 Verification</a>
+<a class="l3" href="#fr-8-safety-rules-absolute">FR-8 Safety rules (absolute)</a>
+<a class="l3" href="#fr-9-reporting">FR-9 Reporting</a>
+<a class="l3" href="#fr-10-configuration-configjson">FR-10 Configuration (`config.json`)</a>
+<a class="l3" href="#fr-11-cli-reference">FR-11 CLI reference</a>
+<a class="l2" href="#6-gui-specification-tkinter">6. GUI specification (Tkinter)</a>
+<a class="l2" href="#7-error-handling">7. Error handling</a>
+<a class="l2" href="#8-performance-targets">8. Performance targets</a>
+<a class="l2" href="#9-logging">9. Logging</a>
+<a class="l2" href="#10-testing-and-acceptance">10. Testing and acceptance</a>
+<a class="l3" href="#unit-tests-pytest-run-by-the-developer">Unit tests (pytest, run by the developer)</a>
+<a class="l3" href="#integration-tests-need-ffmpeg">Integration tests (need ffmpeg)</a>
+<a class="l3" href="#acceptance-criteria-user-visible">Acceptance criteria (user-visible)</a>
+<a class="l2" href="#11-build-and-release-procedure">11. Build and release procedure</a>
+<a class="l2" href="#12-suggested-project-structure">12. Suggested project structure</a>
+<a class="l2" href="#13-future-ideas-not-in-v1">13. Future ideas (not in v1)</a></nav><main><h1 id="dashcam-merger-software-specification">DashCam Merger – Software Specification</h1>
+<p><strong>Version:</strong> 1.0 draft <strong>Date:</strong> 2026-09-14 <strong>Target platform:</strong> Windows 10 / 11 (64-bit), fully offline <strong>Source of requirements:</strong> <code>merge-dashcam-camera-clips.md</code> (Claude skill) in this folder</p>
+<hr>
+<h2 id="1-purpose">1. Purpose</h2>
+<p>DashCam Merger is a standalone Windows program that takes a folder of short dashcam video segments (typically 1-minute clips) recorded by a multi-channel dashcam (Xforce, Vietmap, 70mai, and similar) and merges the clips of each camera (front / rear / interior) into one continuous video per camera, in correct chronological order, without re-encoding and without touching the original files.</p>
+<p>It must run with no internet connection and no AI assistant. Everything the Claude skill does by reasoning is replaced by fixed rules, configuration, and user prompts.</p>
+<h2 id="2-goals-and-non-goals">2. Goals and non-goals</h2>
+<h3 id="goals">Goals</h3>
+<ul>
+<li>One-click (or one-command) merge of a dashcam folder into <code>merged\</code> outputs.</li>
+<li>Lossless, fast merging via ffmpeg stream copy (<code>-c copy</code>).</li>
+<li>Correct camera grouping and time ordering, verified before writing.</li>
+<li>Every output verified with ffprobe; the user is never told "success" without proof.</li>
+<li>Source clips are never deleted, moved, renamed, or modified.</li>
+<li>Works on a plain Windows PC with no Python, no ffmpeg pre-installed (both bundled).</li>
+</ul>
+<h3 id="non-goals-v1">Non-goals (v1)</h3>
+<ul>
+<li>No video editing, trimming, overlays, GPS parsing, or speed/plate detection.</li>
+<li>No re-encoding pipeline (only a warning and an optional advanced re-encode flag).</li>
+<li>No cloud upload (Descript, Drive, etc.).</li>
+<li>No side-by-side / picture-in-picture combining of front + rear into one frame.</li>
+</ul>
+<h2 id="3-users-and-usage-modes">3. Users and usage modes</h2>
+<table><thead><tr><th>Mode</th><th>Who</th><th>How</th></tr></thead><tbody>
+<tr><td>GUI</td><td>Owner of the dashcam, non-technical</td><td>Double-click <code>DashCamMerger.exe</code>, pick folder, click <strong>Merge</strong></td></tr>
+<tr><td>CLI</td><td>Power user, batch scripts, Task Scheduler</td><td><code>DashCamMerger.exe --input &quot;D:\DCIM\Movie&quot; --output &quot;D:\merged&quot;</code></td></tr>
+</tbody></table>
+<p>Both modes call the same core library so behaviour is identical.</p>
+<h2 id="4-technology-choice">4. Technology choice</h2>
+<table><thead><tr><th>Item</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Language</td><td>Python 3.12</td><td>Fast to write, easy to maintain, good subprocess handling</td></tr>
+<tr><td>GUI</td><td>Tkinter (standard library)</td><td>Zero extra dependencies, small build</td></tr>
+<tr><td>Video tools</td><td>ffmpeg.exe + ffprobe.exe (static builds, e.g. gyan.dev or BtbN)</td><td>Industry standard, lossless concat</td></tr>
+<tr><td>Packaging</td><td>PyInstaller, one-folder build</td><td>No Python install needed on target PC</td></tr>
+<tr><td>Config</td><td><code>config.json</code> beside the exe</td><td>Editable in Notepad, no registry</td></tr>
+<tr><td>Logs</td><td><code>logs\merge_YYYYMMDD_HHMMSS.log</code></td><td>Plain text, easy to share when asking for help</td></tr>
+</tbody></table>
+<p>Alternative accepted if Python is unwanted: a single PowerShell 5.1 script <code>Merge-DashCam.ps1</code> with the same rules and a bundled <code>ffmpeg\</code> folder. The specification below applies to either implementation.</p>
+<p>Distribution layout:</p>
+<pre><code>DashCamMerger\
+  DashCamMerger.exe
+  config.json
+  ffmpeg\ffmpeg.exe
+  ffmpeg\ffprobe.exe
+  logs\
+  README.txt</code></pre>
+<p>Total size target: under 150 MB. No installer required; a zip is enough.</p>
+<h2 id="5-functional-requirements">5. Functional requirements</h2>
+<p>Each requirement has an ID for testing. "SHALL" = mandatory.</p>
+<h3 id="fr-1-input-selection">FR-1 Input selection</h3>
+<ul>
+<li>FR-1.1 The user SHALL be able to choose an input folder (GUI folder picker or <code>--input</code>).</li>
+<li>FR-1.2 The tool SHALL scan the folder recursively (depth unlimited by default, <code>--no-recursive</code> to disable) for video files with extensions in <code>config.video_extensions</code> (default: <code>.mp4 .mov .avi .ts .mkv</code>, case-insensitive).</li>
+<li>FR-1.3 Files inside a folder named <code>merged</code> (the tool's own output) SHALL be skipped to avoid merging previous outputs.</li>
+<li>FR-1.4 Files whose name starts with <code>INCOMPLETE_DO_NOT_USE_</code> SHALL be skipped.</li>
+<li>FR-1.5 If zero video files are found, the tool SHALL report this clearly and stop.</li>
+</ul>
+<h3 id="fr-2-camera-detection">FR-2 Camera detection</h3>
+<p>The Claude skill inspects filenames and asks the user when unsure. The offline tool uses a rule table plus a confirmation dialog.</p>
+<ul>
+<li>FR-2.1 The tool SHALL ship with built-in camera detection profiles, tried in order:</li>
+</ul>
+<table><thead><tr><th>Profile</th><th>Regex on filename (case-insensitive)</th><th>Camera label</th></tr></thead><tbody>
+<tr><td>Xforce</td><td>`^(\d{14})_(\d+)([FR])\.(mp4\</td><td>mov)$`</td></tr>
+<tr><td>Suffix underscore</td><td>`_(F\</td><td>R\</td></tr>
+<tr><td>Word</td><td>`(FRONT\</td><td>REAR\</td></tr>
+<tr><td>CamN</td><td><code>CAM([1-3])</code></td><td>CAM1→Front, CAM2→Rear, CAM3→Interior</td></tr>
+<tr><td>Folder</td><td>parent folder name matches any of the above</td><td>same mapping</td></tr>
+<tr><td>70mai</td><td><code>(\d{4}_\d{4}_\d{6}_)(\d+)([FB])?</code> or folders <code>Normal\</code> <code>Rear\</code></td><td>F→Front, B→Rear</td></tr>
+</tbody></table>
+<ul>
+<li>FR-2.2 The tool SHALL apply the first profile that matches at least 90 % of the files. Files that do not match are listed as "Unclassified".</li>
+<li>FR-2.3 If no profile reaches 90 %, or the user passes <code>--camera-map</code>, the tool SHALL fall back to <strong>manual mapping</strong>:</li>
+<ul>
+<li>GUI: dialog showing 5 sample filenames per detected suffix/folder, with a dropdown (Front / Rear / Interior / Skip) for each.</li>
+<li>CLI: <code>--camera-map &quot;F=Front,R=Rear&quot;</code> or <code>--camera-map &quot;folder:Normal=Front,folder:Rear=Rear&quot;</code>.</li>
+</ul>
+<li>FR-2.4 Before merging, the tool SHALL always show a summary ("Front: 143 files, 7.2 GB · Rear: 143 files, 3.9 GB · Unclassified: 0") and wait for confirmation (GUI button; CLI prompt unless <code>--yes</code>).</li>
+<li>FR-2.5 Users SHALL be able to add custom profiles in <code>config.json</code> without code changes:</li>
+</ul>
+<pre><code>&quot;camera_profiles&quot;: [
+  {&quot;name&quot;: &quot;MyBrand&quot;, &quot;regex&quot;: &quot;_(CH[12])\\.mp4$&quot;, &quot;map&quot;: {&quot;CH1&quot;: &quot;Front&quot;, &quot;CH2&quot;: &quot;Rear&quot;}}
+]</code></pre>
+<h3 id="fr-3-chronological-ordering">FR-3 Chronological ordering</h3>
+<ul>
+<li>FR-3.1 For each camera group, the tool SHALL derive a sort key from the filename in this priority: (a) 14-digit timestamp <code>YYYYMMDDHHMMSS</code>; (b) <code>YYYY_MMDD_HHMMSS</code> or <code>YYYY-MM-DD_HH-MM-SS</code> style; (c) numeric sequence number; (d) file modified time.</li>
+<li>FR-3.2 Sorting SHALL never rely on OS directory listing order.</li>
+<li>FR-3.3 If the key used is (d) file mtime, the tool SHALL display a warning ("Order based on file modification time, please spot-check") and write it to the log.</li>
+<li>FR-3.4 The tool SHALL detect gaps: if two consecutive timestamps differ by more than <code>config.gap_warning_seconds</code> (default 300), it SHALL note "gap of N minutes between clip X and clip Y" in the summary. Gaps do not block the merge.</li>
+<li>FR-3.5 Optional <code>--split-on-gap</code> (default off): start a new output part whenever a gap larger than <code>gap_split_seconds</code> (default 1800) is detected, so separate trips become separate files (<code>Front_trip1.mp4</code>, <code>Front_trip2.mp4</code>).</li>
+</ul>
+<h3 id="fr-4-codec-consistency-check">FR-4 Codec consistency check</h3>
+<ul>
+<li>FR-4.1 Before merging a group, the tool SHALL run ffprobe on the first file, the last file, and every N-th file (<code>config.probe_sample_every</code>, default 20).</li>
+<li>FR-4.2 Compared fields: video <code>codec_name</code>, <code>width</code>, <code>height</code>, <code>r_frame_rate</code>, <code>pix_fmt</code>; audio <code>codec_name</code>, <code>sample_rate</code>, <code>channels</code>, and presence/absence of audio.</li>
+<li>FR-4.3 If all sampled files match, stream copy is used.</li>
+<li>FR-4.4 If they differ, the tool SHALL probe every file in the group, split the group into runs of identical parameters, and:</li>
+<ul>
+<li>default: merge each run separately as its own part (<code>Front_part1.mp4</code> …) with stream copy, and explain why in the summary and log;</li>
+<li>with <code>--reencode</code>: re-encode the whole group to one file using <code>-c:v libx264 -crf 18 -preset medium -c:a aac</code> (slow, not lossless; GUI shows an explicit warning and estimated time).</li>
+</ul>
+<li>FR-4.5 A file ffprobe cannot read SHALL be excluded, reported as "corrupt/unreadable", and never abort the whole job.</li>
+</ul>
+<h3 id="fr-5-concat-list-generation">FR-5 Concat list generation</h3>
+<ul>
+<li>FR-5.1 One list file per output SHALL be written to <code>%TEMP%\DashCamMerger\</code> (or the output folder when <code>--keep-lists</code>), using the ffmpeg concat demuxer format.</li>
+<li>FR-5.2 Paths SHALL be <strong>absolute</strong>, forward-slash form, single-quoted, with any single quote in the name escaped as <code>&#x27;\&#x27;&#x27;</code>.</li>
+<li>FR-5.3 The list file SHALL be UTF-8 without BOM.</li>
+</ul>
+<h3 id="fr-6-merge-execution">FR-6 Merge execution</h3>
+<ul>
+<li>FR-6.1 Command used for lossless merge:</li>
+</ul>
+<pre><code>ffmpeg -y -hide_banner -f concat -safe 0 -i &quot;&lt;list.txt&gt;&quot; -c copy -movflags +faststart &quot;&lt;output.mp4&gt;&quot;</code></pre>
+<ul>
+<li>FR-6.2 Outputs SHALL be written to <code>&lt;input&gt;\merged\</code> by default, or <code>--output</code>. The folder is created if missing. Existing outputs are never overwritten silently: the tool appends <code>_2</code>, <code>_3</code>… unless <code>--overwrite</code> is given.</li>
+<li>FR-6.3 Output file naming: <code>&lt;Camera&gt;_&lt;firstTimestamp&gt;_to_&lt;lastTimestamp&gt;.mp4</code>, e.g. <code>Front_20260831152516_to_20260831171203.mp4</code>. Parts add <code>_partN</code>.</li>
+<li>FR-6.4 The tool SHALL write to a temporary name <code>&lt;name&gt;.partial.mp4</code> and rename to the final name only after verification (FR-7) passes. This guarantees a finished <code>.mp4</code> in <code>merged\</code> is always a good file.</li>
+<li>FR-6.5 Groups SHALL be processed sequentially by default; <code>--parallel N</code> allows N simultaneous ffmpeg processes (default 1; disk-bound work rarely benefits).</li>
+<li>FR-6.6 Progress: the tool SHALL parse ffmpeg <code>-progress pipe:1</code> output and show percent complete, elapsed time, MB/s, and estimated remaining time per group.</li>
+<li>FR-6.7 Cancel: the user can cancel at any time. On cancel the tool kills ffmpeg, renames any <code>.partial.mp4</code> to <code>INCOMPLETE_DO_NOT_USE_&lt;name&gt;.mp4</code>, and never deletes it.</li>
+<li>FR-6.8 There is NO time cap. The 120-second limit and 2.5–3 GB chunking from the Claude skill apply only to the sandboxed remote shell and SHALL NOT be implemented. A single 50 GB merge in one ffmpeg call is fine locally. An optional <code>--max-part-gb N</code> remains available for users who want smaller files (e.g. FAT32 USB sticks, where 4 GB is the limit) – default: unlimited.</li>
+</ul>
+<h3 id="fr-7-verification">FR-7 Verification</h3>
+<ul>
+<li>FR-7.1 After each ffmpeg run the tool SHALL run <code>ffprobe -v error -show_entries format=duration,size -of json</code> on the output.</li>
+<li>FR-7.2 The expected duration is the sum of every source clip's ffprobe duration (probed during FR-4; if sampling was used, remaining files are probed here).</li>
+<li>FR-7.3 PASS if <code>|actual − expected| ≤ max(1.0 s, 0.1 % of expected)</code>.</li>
+<li>FR-7.4 FAIL if ffprobe errors (e.g. "moov atom not found"), duration mismatch beyond tolerance, or output size is under 90 % of the summed input size.</li>
+<li>FR-7.5 On FAIL the output is renamed <code>INCOMPLETE_DO_NOT_USE_&lt;name&gt;.mp4</code>, the reason is logged, and the job continues with the next group. The final summary lists failures.</li>
+<li>FR-7.6 After all groups, the tool SHALL re-check that every source file still exists with unchanged size and report "Sources untouched: OK".</li>
+</ul>
+<h3 id="fr-8-safety-rules-absolute">FR-8 Safety rules (absolute)</h3>
+<ul>
+<li>FR-8.1 The program SHALL contain no code path that deletes, moves, renames, or writes to any file inside the input folder except inside the <code>merged\</code> subfolder it creates.</li>
+<li>FR-8.2 The only files the tool may rename are ones it created itself in this run.</li>
+<li>FR-8.3 <code>--overwrite</code> applies only to previous outputs in <code>merged\</code>, never to sources.</li>
+</ul>
+<h3 id="fr-9-reporting">FR-9 Reporting</h3>
+<ul>
+<li>FR-9.1 At the end, the tool SHALL show and log a report table:</li>
+</ul>
+<pre><code>Camera   Part  Output file                                   Files  Duration   Size     Verify
+Front    1     Front_20260831152516_to_20260831171203.mp4    143    2:23:04    7.19 GB  PASS
+Rear     1     Rear_20260831152516_to_20260831171203.mp4     143    2:23:04    3.88 GB  PASS
+Unclassified: 0   Skipped unreadable: 0   Sources untouched: OK
+Output folder: D:\DCIM\Movie\merged</code></pre>
+<ul>
+<li>FR-9.2 The same report SHALL be saved as <code>merged\merge_report.txt</code> and the full log (all ffmpeg/ffprobe commands and their stderr) as <code>logs\merge_&lt;timestamp&gt;.log</code>.</li>
+<li>FR-9.3 GUI: an <strong>Open output folder</strong> button opens <code>merged\</code> in Explorer.</li>
+</ul>
+<h3 id="fr-10-configuration-configjson">FR-10 Configuration (<code>config.json</code>)</h3>
+<pre><code>{
+  &quot;video_extensions&quot;: [&quot;.mp4&quot;, &quot;.mov&quot;, &quot;.avi&quot;, &quot;.ts&quot;, &quot;.mkv&quot;],
+  &quot;output_subfolder&quot;: &quot;merged&quot;,
+  &quot;probe_sample_every&quot;: 20,
+  &quot;gap_warning_seconds&quot;: 300,
+  &quot;gap_split_seconds&quot;: 1800,
+  &quot;split_on_gap&quot;: false,
+  &quot;max_part_gb&quot;: 0,
+  &quot;parallel_jobs&quot;: 1,
+  &quot;ffmpeg_path&quot;: &quot;ffmpeg\\ffmpeg.exe&quot;,
+  &quot;ffprobe_path&quot;: &quot;ffmpeg\\ffprobe.exe&quot;,
+  &quot;camera_profiles&quot;: []
+}</code></pre>
+<p>Missing keys use defaults; an invalid file produces a clear error naming the line.</p>
+<h3 id="fr-11-cli-reference">FR-11 CLI reference</h3>
+<pre><code>DashCamMerger.exe --input &lt;folder&gt; [--output &lt;folder&gt;] [--yes] [--no-recursive]
+                  [--camera-map &quot;F=Front,R=Rear&quot;] [--split-on-gap] [--max-part-gb N]
+                  [--reencode] [--overwrite] [--keep-lists] [--parallel N]
+                  [--dry-run] [--verbose] [--version]</code></pre>
+<ul>
+<li><code>--dry-run</code> performs scan, grouping, ordering and probing, prints the plan and the exact ffmpeg commands, and writes nothing.</li>
+<li>Exit codes: 0 = all groups PASS; 1 = at least one group FAIL; 2 = usage/config error; 3 = no input files; 130 = cancelled by user.</li>
+</ul>
+<h2 id="6-gui-specification-tkinter">6. GUI specification (Tkinter)</h2>
+<p>Single window, about 720×520 px, resizable.</p>
+<ol>
+<li><strong>Input folder</strong> – entry + <strong>Browse…</strong> button.</li>
+<li><strong>Output folder</strong> – entry, defaults to <code>&lt;input&gt;\merged</code>, + <strong>Browse…</strong>.</li>
+<li><strong>Scan</strong> button → fills a table: Camera | Files | Total size | First clip | Last clip | Codec | Order source (timestamp / mtime). Unclassified row if any.</li>
+<li>Options checkboxes: <em>Split on trip gaps</em>, <em>Re-encode if formats differ (slow)</em>, <em>Overwrite existing outputs</em>; spinbox <em>Max part size (GB, 0 = unlimited)</em>.</li>
+<li><strong>Merge</strong> button (enabled after a successful scan) and <strong>Cancel</strong> button.</li>
+<li>Progress area: one progress bar per camera group with percent, MB/s, ETA; a scrolling log pane below.</li>
+<li>Result panel with the report table (FR-9) and <strong>Open output folder</strong>.</li>
+<li>Menu: File → Open config.json, Open logs folder, Exit; Help → About (shows ffmpeg version and build date).</li>
+</ol>
+<p>When camera detection is ambiguous (FR-2.3) a modal dialog appears during <strong>Scan</strong>.</p>
+<h2 id="7-error-handling">7. Error handling</h2>
+<table><thead><tr><th>Situation</th><th>Behaviour</th></tr></thead><tbody>
+<tr><td>ffmpeg/ffprobe missing</td><td>Stop with message naming the expected path; exit 2</td></tr>
+<tr><td>Input folder not readable</td><td>Stop; exit 2</td></tr>
+<tr><td>Output drive full during merge</td><td>ffmpeg fails → output renamed INCOMPLETE_…, error logged, continue with next group; exit 1</td></tr>
+<tr><td>Filename contains <code>&#x27;</code> or non-ASCII</td><td>Handled by escaping (FR-5.2) and UTF-8; tested</td></tr>
+<tr><td>Very long paths (&gt;260 chars)</td><td>Use <code>\\?\</code> prefix on Windows for all file operations</td></tr>
+<tr><td>Mixed audio/no-audio clips</td><td>Treated as codec mismatch (FR-4.4)</td></tr>
+<tr><td>User closes window mid-merge</td><td>Same as Cancel (FR-6.7)</td></tr>
+</tbody></table>
+<h2 id="8-performance-targets">8. Performance targets</h2>
+<ul>
+<li>Stream copy throughput is limited by disk; target ≥ 100 MB/s on SSD-to-SSD, ≥ 30 MB/s from an SD card reader. The tool never adds more than 5 % overhead.</li>
+<li>Scan + probe of 1 000 clips with sampling completes in under 30 s on HDD.</li>
+<li>Memory under 200 MB regardless of footage size (streaming, no clips loaded in RAM).</li>
+</ul>
+<h2 id="9-logging">9. Logging</h2>
+<ul>
+<li>One log file per run in <code>logs\</code>. Level INFO by default, DEBUG with <code>--verbose</code>.</li>
+<li>Every external command is logged verbatim with its exit code and stderr tail.</li>
+<li>Logs never contain anything but paths, sizes, durations and tool output.</li>
+<li>Logs older than 30 days are pruned at startup (only in the tool's own <code>logs\</code> folder).</li>
+</ul>
+<h2 id="10-testing-and-acceptance">10. Testing and acceptance</h2>
+<h3 id="unit-tests-pytest-run-by-the-developer">Unit tests (pytest, run by the developer)</h3>
+<ul>
+<li>Camera profile matching for each brand pattern, including near-misses.</li>
+<li>Sort-key extraction for all timestamp styles; stable ordering with identical keys.</li>
+<li>Concat list escaping (<code>&#x27;</code>, spaces, Unicode, UNC paths).</li>
+<li>Duration tolerance logic (FR-7.3).</li>
+<li>Config loading with missing/invalid keys.</li>
+</ul>
+<h3 id="integration-tests-need-ffmpeg">Integration tests (need ffmpeg)</h3>
+<ul>
+<li>Generate 6 synthetic 2-second clips per camera with ffmpeg <code>testsrc</code>, run the tool, assert two outputs of 12 s each, PASS, sources unchanged (hash compare).</li>
+<li>Inject one clip with different resolution → expect two parts and a warning.</li>
+<li>Inject one truncated file → expect it skipped and reported, job still PASS for the rest.</li>
+<li>Cancel mid-run → expect <code>INCOMPLETE_DO_NOT_USE_</code> file and no deletion.</li>
+</ul>
+<h3 id="acceptance-criteria-user-visible">Acceptance criteria (user-visible)</h3>
+<ol>
+<li>Merging a real Xforce folder produces one Front and one Rear file whose durations equal the sums of the clips, playable in VLC and Windows Media Player, seekable.</li>
+<li>The original folder is byte-for-byte unchanged apart from the new <code>merged\</code> folder.</li>
+<li>The whole procedure needs no internet and no admin rights.</li>
+<li>A non-technical user can complete it from README.txt in under 5 minutes.</li>
+</ol>
+<h2 id="11-build-and-release-procedure">11. Build and release procedure</h2>
+<ol>
+<li><code>python -m venv .venv &amp;&amp; .venv\Scripts\activate &amp;&amp; pip install pyinstaller pytest</code></li>
+<li>Download a static Windows ffmpeg build; copy <code>ffmpeg.exe</code>, <code>ffprobe.exe</code> into <code>ffmpeg\</code>.</li>
+<li><code>pytest</code></li>
+<li><code>pyinstaller --noconfirm --onedir --windowed --name DashCamMerger --add-data &quot;ffmpeg;ffmpeg&quot; --add-data &quot;config.json;.&quot; src\main.py</code></li>
+<li>Zip <code>dist\DashCamMerger\</code> as <code>DashCamMerger_v1.0_win64.zip</code>.</li>
+<li>Record ffmpeg version and SHA-256 of the zip in <code>CHANGELOG.md</code>.</li>
+</ol>
+<h2 id="12-suggested-project-structure">12. Suggested project structure</h2>
+<pre><code>src\
+  main.py            entry point: decides GUI vs CLI
+  cli.py             argparse, exit codes
+  gui.py             Tkinter window
+  core\
+    scanner.py       FR-1
+    cameras.py       FR-2 profiles + manual mapping
+    ordering.py      FR-3
+    probe.py         FR-4 ffprobe wrapper + caching
+    concat.py        FR-5, FR-6 list writing + ffmpeg runner + progress
+    verify.py        FR-7
+    report.py        FR-9
+    config.py        FR-10
+tests\
+ffmpeg\
+config.json
+README.txt</code></pre>
+<h2 id="13-future-ideas-not-in-v1">13. Future ideas (not in v1)</h2>
+<ul>
+<li>Side-by-side Front+Rear composite export.</li>
+<li>Extract embedded GPS/G-sensor data to GPX.</li>
+<li>Auto-detect and merge only clips from a chosen date range.</li>
+<li>Portable "right-click a folder → Merge dashcam clips" Explorer context menu entry.</li>
+</ul></main></div></body></html>
