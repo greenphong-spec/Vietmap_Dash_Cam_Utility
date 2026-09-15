@@ -1,0 +1,13 @@
+{
+  "video_extensions": [".mp4", ".mov", ".avi", ".ts", ".mkv"],
+  "output_subfolder": "merged",
+  "probe_sample_every": 20,
+  "gap_warning_seconds": 300,
+  "gap_split_seconds": 1800,
+  "split_on_gap": false,
+  "max_part_gb": 0,
+  "parallel_jobs": 1,
+  "ffmpeg_path": "ffmpeg\\ffmpeg.exe",
+  "ffprobe_path": "ffmpeg\\ffprobe.exe",
+  "camera_profiles": []
+}

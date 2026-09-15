@@ -1,0 +1,10 @@
+2026-09-14 22:29:44,715 INFO    dashcam_merger.pipeline: Run 20260914_222944: input=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-12\test_it2_resolution_change_spl0\Movie output=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-12\test_it2_resolution_change_spl0\Movie\merged
+2026-09-14 22:29:44,720 INFO    dashcam_merger.scanner: Scanned 6 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-12\test_it2_resolution_change_spl0\Movie
+2026-09-14 22:29:44,720 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
+2026-09-14 22:29:44,721 INFO    dashcam_merger.ordering: Front: 6 clips ordered by timestamp
+2026-09-14 22:29:44,930 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:29:44,937 INFO    dashcam_merger.concat: Concat list Front_20260831152516_to_20260831153016.txt lists 6 clips
+2026-09-14 22:29:44,937 INFO    dashcam_merger.concat: Running: C:\Claude\40_DashCAMmerger\ffmpeg\ffmpeg.exe -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i C:\Users\phong\AppData\Local\Temp\DashCamMerger\20260914_222944\Front_20260831152516_to_20260831153016.txt -c copy -movflags +faststart C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-12\test_it2_resolution_change_spl0\Movie\merged\Front_20260831152516_to_20260831153016.partial.mp4
+2026-09-14 22:29:45,194 INFO    dashcam_merger.concat: ffmpeg exit 0 for Front_20260831152516_to_20260831153016.partial.mp4
+2026-09-14 22:29:45,487 INFO    dashcam_merger.safe_io: renamed Front_20260831152516_to_20260831153016.partial.mp4 -> Front_20260831152516_to_20260831153016.mp4
+2026-09-14 22:29:45,490 INFO    dashcam_merger.report: Report written to C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-12\test_it2_resolution_change_spl0\Movie\merged\merge_report.txt

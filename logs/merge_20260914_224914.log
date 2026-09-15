@@ -1,0 +1,11 @@
+2026-09-14 22:49:14,666 INFO    dashcam_merger.pipeline: Run 20260914_224914: input=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it6_cancel_keeps_incomple0\Movie output=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it6_cancel_keeps_incomple0\Movie\merged
+2026-09-14 22:49:14,669 INFO    dashcam_merger.scanner: Scanned 6 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it6_cancel_keeps_incomple0\Movie
+2026-09-14 22:49:14,670 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
+2026-09-14 22:49:14,681 INFO    dashcam_merger.ordering: Front: 6 clips ordered by timestamp
+2026-09-14 22:49:14,890 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:49:14,895 INFO    dashcam_merger.concat: Concat list Front_20260831152516_to_20260831153016.txt lists 6 clips
+2026-09-14 22:49:14,895 INFO    dashcam_merger.concat: Running: C:\Users\phong\AppData\Local\Programs\Python\Python313\python.exe C:\Claude\40_DashCAMmerger\tests\fixtures\slow_ffmpeg.py C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it6_cancel_keeps_incomple0\Movie\merged\Front_20260831152516_to_20260831153016.partial.mp4
+2026-09-14 22:49:15,037 WARNING dashcam_merger.concat: Cancelled: Front_20260831152516_to_20260831153016.mp4
+2026-09-14 22:49:15,049 INFO    dashcam_merger.safe_io: renamed Front_20260831152516_to_20260831153016.partial.mp4 -> INCOMPLETE_DO_NOT_USE_Front_20260831152516_to_20260831153016.mp4
+2026-09-14 22:49:15,052 INFO    dashcam_merger.report: Report written to C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it6_cancel_keeps_incomple0\Movie\merged\merge_report.txt
+2026-09-14 22:49:15,057 INFO    dashcam_merger.config: config.json not found, using defaults

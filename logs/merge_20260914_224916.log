@@ -1,0 +1,10 @@
+2026-09-14 22:49:16,865 INFO    dashcam_merger.pipeline: Run 20260914_224916: input=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it7_unknown_camera_map_to0\Movie output=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it7_unknown_camera_map_to0\Movie\merged
+2026-09-14 22:49:16,869 INFO    dashcam_merger.scanner: Scanned 6 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it7_unknown_camera_map_to0\Movie
+2026-09-14 22:49:16,869 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:49:16,930 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:49:16,942 INFO    dashcam_merger.concat: Concat list Front_20260831152516_to_20260831152716.txt lists 3 clips
+2026-09-14 22:49:16,943 INFO    dashcam_merger.concat: Running: C:\Claude\40_DashCAMmerger\ffmpeg\ffmpeg.exe -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i C:\Users\phong\AppData\Local\Temp\DashCamMerger\20260914_224916\Front_20260831152516_to_20260831152716.txt -c copy -movflags +faststart C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it7_unknown_camera_map_to0\Movie\merged\Front_20260831152516_to_20260831152716.partial.mp4
+2026-09-14 22:49:17,069 INFO    dashcam_merger.concat: ffmpeg exit 0 for Front_20260831152516_to_20260831152716.partial.mp4
+2026-09-14 22:49:17,128 INFO    dashcam_merger.safe_io: renamed Front_20260831152516_to_20260831152716.partial.mp4 -> Front_20260831152516_to_20260831152716.mp4
+2026-09-14 22:49:17,134 INFO    dashcam_merger.report: Report written to C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-21\test_it7_unknown_camera_map_to0\Movie\merged\merge_report.txt
+2026-09-14 22:49:17,165 INFO    dashcam_merger.config: config.json not found, using defaults

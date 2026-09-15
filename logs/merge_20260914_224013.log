@@ -1,0 +1,6 @@
+2026-09-14 22:40:13,119 INFO    dashcam_merger.pipeline: Run 20260914_224013: input=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-17\test_scan_then_merge_on_fixtur0\Movie output=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-17\test_scan_then_merge_on_fixtur0\Movie\merged
+2026-09-14 22:40:13,123 INFO    dashcam_merger.scanner: Scanned 6 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-17\test_scan_then_merge_on_fixtur0\Movie
+2026-09-14 22:40:13,124 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
+2026-09-14 22:40:13,124 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:40:13,124 INFO    dashcam_merger.ordering: Rear: 3 clips ordered by timestamp
+2026-09-14 22:40:13,260 INFO    dashcam_merger.planner: Plan: 2 group(s), 2 part(s)

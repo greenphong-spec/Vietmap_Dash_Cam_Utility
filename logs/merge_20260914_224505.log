@@ -1,0 +1,84 @@
+2026-09-14 22:45:05,632 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,633 INFO    dashcam_merger.ordering: Front: 3 clips ordered by sequence
+2026-09-14 22:45:05,635 INFO    dashcam_merger.ordering: Front: 2 clips ordered by mtime
+2026-09-14 22:45:05,636 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,636 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,638 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,639 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,641 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,642 INFO    dashcam_merger.ordering: Front: 2 clips ordered by mtime
+2026-09-14 22:45:05,645 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,650 INFO    dashcam_merger.ordering: Front: 5 clips ordered by timestamp
+2026-09-14 22:45:05,650 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,654 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,656 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,656 INFO    dashcam_merger.ordering: Rear: 3 clips ordered by timestamp
+2026-09-14 22:45:05,657 INFO    dashcam_merger.planner: Plan: 2 group(s), 2 part(s)
+2026-09-14 22:45:05,660 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,662 INFO    dashcam_merger.ordering: Front: 4 clips ordered by timestamp
+2026-09-14 22:45:05,662 INFO    dashcam_merger.planner: Plan: 1 group(s), 2 part(s)
+2026-09-14 22:45:05,665 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,667 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,667 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,675 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,677 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,677 INFO    dashcam_merger.planner: Plan: 1 group(s), 3 part(s)
+2026-09-14 22:45:05,680 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,682 INFO    dashcam_merger.ordering: Front: 4 clips ordered by timestamp
+2026-09-14 22:45:05,683 INFO    dashcam_merger.planner: Plan: 1 group(s), 2 part(s)
+2026-09-14 22:45:05,686 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,688 INFO    dashcam_merger.ordering: Front: 4 clips ordered by timestamp
+2026-09-14 22:45:05,688 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,692 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,694 INFO    dashcam_merger.ordering: Front: 4 clips ordered by timestamp
+2026-09-14 22:45:05,694 INFO    dashcam_merger.planner: Plan: 1 group(s), 2 part(s)
+2026-09-14 22:45:05,697 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,699 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,699 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,702 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,705 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
+2026-09-14 22:45:05,705 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,710 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,714 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,715 INFO    dashcam_merger.planner: Plan: 1 group(s), 2 part(s)
+2026-09-14 22:45:05,720 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,722 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,722 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,723 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,724 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,728 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,733 INFO    dashcam_merger.ordering: Front: 4 clips ordered by timestamp
+2026-09-14 22:45:05,733 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,736 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,738 INFO    dashcam_merger.ordering: Front: 1 clips ordered by timestamp
+2026-09-14 22:45:05,739 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,739 INFO    dashcam_merger.ordering: Front: 1 clips ordered by timestamp
+2026-09-14 22:45:05,739 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,742 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,744 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,745 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,748 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,750 INFO    dashcam_merger.ordering: Front: 2 clips ordered by mtime
+2026-09-14 22:45:05,750 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,753 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,755 INFO    dashcam_merger.ordering: Front: 1 clips ordered by timestamp
+2026-09-14 22:45:05,755 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,759 INFO    dashcam_merger.config: config.json not found, using defaults
+2026-09-14 22:45:05,761 INFO    dashcam_merger.ordering: Front: 2 clips ordered by timestamp
+2026-09-14 22:45:05,761 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
+2026-09-14 22:45:05,798 WARNING dashcam_merger.probe: Unreadable clip x.mp4: [WinError 2] The system cannot find the file specified
+2026-09-14 22:45:05,881 WARNING dashcam_merger.probe: Unreadable clip bogus.mp4: [mov,mp4,m4a,3gp,3g2,mj2 @ 00000214ed8d4b80] moov atom not found
+\\?\C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_probe_clip_on_text_file_m0\bogus.mp4: Invalid data found when processing input
+2026-09-14 22:45:05,915 INFO    dashcam_merger.report: Report written to C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_write_report_lands_in_out0\merge_report.txt
+2026-09-14 22:45:05,973 INFO    dashcam_merger.safe_io: renamed a.partial.mp4 -> a.mp4
+2026-09-14 22:45:05,991 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_recursive_finds_nested_fi0
+2026-09-14 22:45:06,002 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_merged_folder_skipped0
+2026-09-14 22:45:06,016 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_incomplete_prefix_skipped0
+2026-09-14 22:45:06,030 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_extension_match_is_case_i0
+2026-09-14 22:45:06,048 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_non_video_extension_ignor0
+2026-09-14 22:45:06,061 INFO    dashcam_merger.scanner: Scanned 1 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_no_recursive_sees_only_to0
+2026-09-14 22:45:06,084 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_sizes_and_mtime_recorded0
+2026-09-14 22:45:06,100 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_result_is_deterministical0
+2026-09-14 22:45:06,104 INFO    dashcam_merger.scanner: Scanned 3 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_result_is_deterministical0
+2026-09-14 22:45:06,109 INFO    dashcam_merger.scanner: Scanned 0 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_empty_folder_returns_empt0
+2026-09-14 22:45:06,121 INFO    dashcam_merger.scanner: Scanned 1 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-20\test_output_subfolder_match_is0
