@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dashcam_merger.cli import build_parser, options_from_args
+from dashcam_merger.cli import CliConfirmer, build_parser, options_from_args
 from dashcam_merger.core.config import load_config
 from dashcam_merger.core.models import RunOptions
 from dashcam_merger.core.pipeline import (
@@ -53,6 +53,7 @@ def test_parser_all_flags():
             "--parallel", "2",
             "--dry-run",
             "--verbose",
+            "--delete-source",
         ]
     )
     assert opt.output_dir == Path("E:/y")
@@ -61,6 +62,21 @@ def test_parser_all_flags():
     assert opt.split_on_gap is True and opt.max_part_gb == 3.5
     assert opt.reencode and opt.overwrite and opt.keep_lists
     assert opt.parallel == 2 and opt.dry_run and opt.verbose
+    assert opt.delete_source is True
+
+
+def test_parser_delete_source_defaults_false():
+    assert parse(["--input", "D:/x"]).delete_source is False
+
+
+def test_cli_confirm_delete_with_yes_skips_prompt():
+    assert CliConfirmer(assume_yes=True).confirm_delete([]) is True
+
+
+def test_cli_confirm_delete_without_yes_and_non_interactive_keeps_files(monkeypatch):
+    confirmer = CliConfirmer(assume_yes=False)
+    monkeypatch.setattr(CliConfirmer, "_interactive", staticmethod(lambda: False))
+    assert confirmer.confirm_delete([]) is False
 
 
 def test_invalid_camera_map_rejected():

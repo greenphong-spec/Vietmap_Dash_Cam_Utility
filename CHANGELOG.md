@@ -2,6 +2,21 @@
 
 All notable changes to DashCam Merger.
 
+## Unreleased
+
+### Added
+- `--delete-source` (CLI) and "Delete original clips after successful merge"
+  (GUI) (FR-12): an explicit, off-by-default opt-in to permanently delete
+  source clips once their merged output has passed verification. Requires a
+  separate confirmation (a typed "yes" on the CLI without `--yes`, a warning
+  dialog in the GUI) naming the exact file count. Clips belonging to a
+  FAILED or CANCELLED part are never touched. Deletion outcome is logged and
+  added to `merge_report.txt`.
+- New `core/cleanup.py`: the sole, narrowly-scoped exception to FR-8's
+  "never delete" rule, kept deliberately separate from `safe_io.WriteGuard`.
+  The safety-grep test (`test_integration.py`) now allowlists this module by
+  name alongside `logging_setup.py`.
+
 ## 1.0.0 — 2026-09-14
 
 First version. Implements `DashCamMerger-Specification.md` v1.0 and

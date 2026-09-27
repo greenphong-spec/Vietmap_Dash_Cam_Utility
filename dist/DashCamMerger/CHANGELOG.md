@@ -2,6 +2,21 @@
 
 All notable changes to DashCam Merger.
 
+## Unreleased
+
+### Added
+- `--delete-source` (CLI) and "Delete original clips after successful merge"
+  (GUI) (FR-12): an explicit, off-by-default opt-in to permanently delete
+  source clips once their merged output has passed verification. Requires a
+  separate confirmation (a typed "yes" on the CLI without `--yes`, a warning
+  dialog in the GUI) naming the exact file count. Clips belonging to a
+  FAILED or CANCELLED part are never touched. Deletion outcome is logged and
+  added to `merge_report.txt`.
+- New `core/cleanup.py`: the sole, narrowly-scoped exception to FR-8's
+  "never delete" rule, kept deliberately separate from `safe_io.WriteGuard`.
+  The safety-grep test (`test_integration.py`) now allowlists this module by
+  name alongside `logging_setup.py`.
+
 ## 1.0.0 — 2026-09-14
 
 First version. Implements `DashCamMerger-Specification.md` v1.0 and
@@ -53,4 +68,11 @@ First version. Implements `DashCamMerger-Specification.md` v1.0 and
 
 ### Bundled
 - ffmpeg / ffprobe 6.1.1 (gyan.dev essentials build).
-  Release builds must record the SHA-256 of the shipped zip here.
+
+### Release artefact
+- `DashCamMerger_v1.0_win64.zip` - 70.8 MB
+  SHA-256 `D88DC2C036CB825EDD357ABFB753936BB6CDE30B49B62D923367042EF68AC6FA`
+- Unpacked folder is 190 MB, above the Spec section 4 target of 150 MB: the two
+  static ffmpeg binaries are 79 MB each. The zip is well inside it. To hit 150 MB
+  unpacked, ship a smaller ffmpeg build (a shared/LGPL build is roughly a third
+  of the size) and drop the two binaries into an `ffmpeg\` folder beside the exe.

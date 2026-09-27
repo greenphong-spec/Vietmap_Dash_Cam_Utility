@@ -196,9 +196,11 @@ ffmpeg -y -hide_banner -f concat -safe 0 -i "<list.txt>" -c copy -movflags +fast
 - FR-7.6 After all groups, the tool SHALL re-check that every source file still exists
   with unchanged size and report "Sources untouched: OK".
 
-### FR-8 Safety rules (absolute)
-- FR-8.1 The program SHALL contain no code path that deletes, moves, renames, or writes
-  to any file inside the input folder except inside the `merged\` subfolder it creates.
+### FR-8 Safety rules (absolute, except the opt-in deletion in FR-12)
+- FR-8.1 The program SHALL contain no code path that moves, renames, or writes to any
+  file inside the input folder except inside the `merged\` subfolder it creates. The one
+  exception is deleting a source clip, which is only ever possible through the explicit,
+  off-by-default mechanism in FR-12 - never as a side effect of any other feature.
 - FR-8.2 The only files the tool may rename are ones it created itself in this run.
 - FR-8.3 `--overwrite` applies only to previous outputs in `merged\`, never to sources.
 
@@ -243,13 +245,30 @@ Missing keys use defaults; an invalid file produces a clear error naming the lin
 DashCamMerger.exe --input <folder> [--output <folder>] [--yes] [--no-recursive]
                   [--camera-map "F=Front,R=Rear"] [--split-on-gap] [--max-part-gb N]
                   [--reencode] [--overwrite] [--keep-lists] [--parallel N]
-                  [--dry-run] [--verbose] [--version]
+                  [--dry-run] [--delete-source] [--verbose] [--version]
 ```
 
 - `--dry-run` performs scan, grouping, ordering and probing, prints the plan and the
   exact ffmpeg commands, and writes nothing.
 - Exit codes: 0 = all groups PASS; 1 = at least one group FAIL; 2 = usage/config error;
   3 = no input files; 130 = cancelled by user.
+
+### FR-12 Opt-in source deletion (off by default)
+- FR-12.1 `--delete-source` (CLI) / "Delete original clips after successful merge" (GUI)
+  SHALL be off unless explicitly set. When on, a source clip is eligible for deletion
+  only if the output part it belongs to has status PASS (FR-7). Clips belonging to a
+  FAILED, CANCELLED, or SKIPPED part SHALL never be deleted.
+- FR-12.2 Deletion SHALL require a confirmation naming the exact number of files, taken
+  separately from the plan confirmation in FR-2.4: on the CLI, a typed "yes" prompt
+  unless `--yes` is also given (which counts as confirmation); in the GUI, a warning
+  dialog every time, regardless of other auto-confirm behaviour.
+- FR-12.3 Deletion SHALL refuse to remove any path inside the run's output or temp
+  folders, even if such a path were ever passed to it.
+- FR-12.4 The report (screen, and `merge_report.txt`) SHALL state how many source clips
+  were deleted, and name any that could not be deleted and why.
+- FR-12.5 This is the only path in the program that deletes a file the user did not
+  create in this run (compare FR-8.1); it lives in its own module, kept separate from
+  the write/rename gatekeeper (Design Section 5.3).
 
 ## 6. GUI specification (Tkinter)
 
@@ -260,7 +279,9 @@ Single window, about 720×520 px, resizable.
 3. **Scan** button → fills a table: Camera | Files | Total size | First clip | Last clip |
    Codec | Order source (timestamp / mtime). Unclassified row if any.
 4. Options checkboxes: *Split on trip gaps*, *Re-encode if formats differ (slow)*,
-   *Overwrite existing outputs*; spinbox *Max part size (GB, 0 = unlimited)*.
+   *Overwrite existing outputs*, *Delete original clips after successful merge
+   (cannot be undone)* (FR-12, off by default); spinbox *Max part size (GB,
+   0 = unlimited)*.
 5. **Merge** button (enabled after a successful scan) and **Cancel** button.
 6. Progress area: one progress bar per camera group with percent, MB/s, ETA;
    a scrolling log pane below.
@@ -315,7 +336,8 @@ When camera detection is ambiguous (FR-2.3) a modal dialog appears during **Scan
 ### Acceptance criteria (user-visible)
 1. Merging a real Xforce folder produces one Front and one Rear file whose durations
    equal the sums of the clips, playable in VLC and Windows Media Player, seekable.
-2. The original folder is byte-for-byte unchanged apart from the new `merged\` folder.
+2. The original folder is byte-for-byte unchanged apart from the new `merged\` folder,
+   unless the user explicitly enabled and confirmed FR-12 source deletion.
 3. The whole procedure needs no internet and no admin rights.
 4. A non-technical user can complete it from README.txt in under 5 minutes.
 
@@ -344,6 +366,7 @@ src\
     verify.py        FR-7
     report.py        FR-9
     config.py        FR-10
+    cleanup.py       FR-12 opt-in source deletion
 tests\
 ffmpeg\
 config.json

@@ -38,6 +38,7 @@ li{margin:3px 0}
 <a class="l3" href="#51-coreconfigpy-fr-10">5.1 `core/config.py` — FR-10</a>
 <a class="l3" href="#52-corelogging_setuppy-spec-9">5.2 `core/logging_setup.py` — Spec §9</a>
 <a class="l3" href="#53-coresafe_iopy-fr-8-section-12">5.3 `core/safe_io.py` — FR-8 (Section 12)</a>
+<a class="l4" href="#531-corecleanuppy-fr-12-opt-in-exception-to-never-delete">5.3.1 `core/cleanup.py` — FR-12 (opt-in exception to &quot;never delete&quot;)</a>
 <a class="l3" href="#54-corescannerpy-fr-1">5.4 `core/scanner.py` — FR-1</a>
 <a class="l3" href="#55-corecameraspy-fr-2">5.5 `core/cameras.py` — FR-2</a>
 <a class="l4" href="#551-built-in-profiles-normative-in-this-order">5.5.1 Built-in profiles (normative, in this order)</a>
@@ -70,18 +71,26 @@ li{margin:3px 0}
 <a class="l2" href="#14-implementation-plan-do-these-in-order">14. Implementation plan (do these in order)</a>
 <a class="l2" href="#15-build-buildbat">15. Build (`build.bat`)</a>
 <a class="l2" href="#16-traceability-matrix">16. Traceability matrix</a></nav><main><h1 id="dashcam-merger-detailed-software-design">DashCam Merger – Detailed Software Design</h1>
-<p><strong>Version:</strong> 1.0 <strong>Date:</strong> 2026-09-14 <strong>Implements:</strong> <code>DashCamMerger-Specification.md</code> v1.0 (all FR-1 … FR-11, sections 6–11) <strong>Audience:</strong> the developer or AI model that writes the code. Follow this document literally.</p>
-<hr>
+<p><strong>Version:</strong> 1.0
+<strong>Date:</strong> 2026-09-14
+<strong>Implements:</strong> <code>DashCamMerger-Specification.md</code> v1.0 (all FR-1 … FR-12, sections 6–11)
+<strong>Audience:</strong> the developer or AI model that writes the code. Follow this document literally.</p>
+<hr />
 <h2 id="0-how-to-use-this-document">0. How to use this document</h2>
 <ol>
 <li>Implement the modules in the order given in <strong>Section 14 (Implementation plan)</strong>. Do not skip ahead.</li>
 <li>After each step, run the tests listed for that step. Do not start the next step until they pass.</li>
-<li>Every function signature, data class field, regex, command line, file name, and message text in this document is <strong>normative</strong>. Copy them exactly. Do not rename, reorder, or "improve" them.</li>
-<li>When something is not covered here, choose the simplest solution that keeps every rule in <strong>Section 2 (Fixed decisions)</strong> and <strong>Section 12 (Safety rules)</strong> true, and add a comment <code># DESIGN-GAP: &lt;what you decided&gt;</code> at that place in the code.</li>
-<li>Never add third-party Python packages. Only the standard library, plus <code>pytest</code> and <code>pyinstaller</code> as developer-only tools.</li>
-<li>Requirement IDs (<code>FR-x.y</code>) are quoted next to the code that satisfies them. Keep them as comments in the code (<code># FR-6.4</code>) so the traceability matrix in Section 16 stays true.</li>
+<li>Every function signature, data class field, regex, command line, file name, and message text in this
+   document is <strong>normative</strong>. Copy them exactly. Do not rename, reorder, or "improve" them.</li>
+<li>When something is not covered here, choose the simplest solution that keeps every rule in
+   <strong>Section 2 (Fixed decisions)</strong> and <strong>Section 12 (Safety rules)</strong> true, and add a comment
+   <code># DESIGN-GAP: &lt;what you decided&gt;</code> at that place in the code.</li>
+<li>Never add third-party Python packages. Only the standard library, plus <code>pytest</code> and <code>pyinstaller</code>
+   as developer-only tools.</li>
+<li>Requirement IDs (<code>FR-x.y</code>) are quoted next to the code that satisfies them. Keep them as comments
+   in the code (<code># FR-6.4</code>) so the traceability matrix in Section 16 stays true.</li>
 </ol>
-<hr>
+<hr />
 <h2 id="1-system-overview">1. System overview</h2>
 <pre><code>+-------------------+        +------------------------------------------------------------+
 |  Presentation     |        |  Core library  (package: dashcam_merger.core)              |
@@ -93,29 +102,78 @@ li{margin:3px 0}
 +-------------------+        |  progress (event objects sent to CLI/GUI through a queue)  |
                              +------------------------------------------------------------+
                                        |                       |
-                                 ffmpeg\ffprobe.exe      ffmpeg\ffmpeg.exe</code></pre>
+                                 ffmpeg\ffprobe.exe      ffmpeg\ffmpeg.exe
+</code></pre>
 <ul>
-<li>The core never prints and never opens a window. It reports through <code>ProgressEvent</code> objects pushed to a <code>queue.Queue</code> and through the log.</li>
+<li>The core never prints and never opens a window. It reports through <code>ProgressEvent</code> objects
+  pushed to a <code>queue.Queue</code> and through the log.</li>
 <li>The CLI and GUI are thin. All decisions are made in the core so both modes behave identically (Spec §3).</li>
 </ul>
-<hr>
+<hr />
 <h2 id="2-fixed-decisions">2. Fixed decisions</h2>
-<table><thead><tr><th>Topic</th><th>Decision</th></tr></thead><tbody>
-<tr><td>Python</td><td>3.12 (3.13 acceptable). Type hints everywhere. <code>from __future__ import annotations</code> in each file.</td></tr>
-<tr><td>Dependencies</td><td>Standard library only: <code>pathlib, re, json, subprocess, threading, queue, dataclasses, datetime, logging, argparse, tkinter, hashlib, shutil, os, sys, time, tempfile</code>.</td></tr>
-<tr><td>Package name</td><td><code>dashcam_merger</code> (folder <code>src\dashcam_merger</code>).</td></tr>
-<tr><td>Encoding</td><td>All text files read/written as UTF-8. Concat lists: UTF-8 <strong>without BOM</strong> (FR-5.3).</td></tr>
-<tr><td>Paths</td><td><code>pathlib.Path</code> everywhere. Convert to string only when calling subprocess. Use <code>win_long(path)</code> (Section 5.9) for every OS file operation.</td></tr>
-<tr><td>Subprocess</td><td><code>subprocess.Popen</code> / <code>subprocess.run</code> with <code>creationflags=subprocess.CREATE_NO_WINDOW</code> on Windows, <code>text=True, encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;</code>. Never <code>shell=True</code>.</td></tr>
-<tr><td>ffmpeg location</td><td><code>config.ffmpeg_path</code> and <code>config.ffprobe_path</code>, relative to the <strong>application directory</strong> (Section 5.1 <code>app_dir()</code>), not to the current working directory.</td></tr>
-<tr><td>Output naming</td><td><code>&lt;Camera&gt;_&lt;firstTs&gt;_to_&lt;lastTs&gt;[_partN].mp4</code> (FR-6.3). If timestamps are unavailable, use <code>&lt;Camera&gt;_&lt;firstFileStem&gt;_to_&lt;lastFileStem&gt;</code>.</td></tr>
-<tr><td>Temp files</td><td><code>%TEMP%\DashCamMerger\&lt;runId&gt;\</code> for concat lists; <code>&lt;output&gt;\&lt;name&gt;.partial.mp4</code> during writing (FR-6.4).</td></tr>
-<tr><td>Run id</td><td><code>runId = datetime.now().strftime(&quot;%Y%m%d_%H%M%S&quot;)</code>. Used in log file name and temp folder.</td></tr>
-<tr><td>Threads</td><td>GUI: the core runs in one <code>threading.Thread</code>; cancellation via <code>threading.Event</code>. CLI: same core function, called directly on the main thread.</td></tr>
-<tr><td>Camera labels</td><td>Exactly three strings: <code>&quot;Front&quot;</code>, <code>&quot;Rear&quot;</code>, <code>&quot;Interior&quot;</code>. Anything else is <code>&quot;Unclassified&quot;</code> or <code>&quot;Skip&quot;</code>.</td></tr>
-<tr><td>Version string</td><td><code>__version__ = &quot;1.0.0&quot;</code> in <code>dashcam_merger/__init__.py</code>.</td></tr>
-</tbody></table>
-<hr>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td>3.12 (3.13 acceptable). Type hints everywhere. <code>from __future__ import annotations</code> in each file.</td>
+</tr>
+<tr>
+<td>Dependencies</td>
+<td>Standard library only: <code>pathlib, re, json, subprocess, threading, queue, dataclasses, datetime, logging, argparse, tkinter, hashlib, shutil, os, sys, time, tempfile</code>.</td>
+</tr>
+<tr>
+<td>Package name</td>
+<td><code>dashcam_merger</code> (folder <code>src\dashcam_merger</code>).</td>
+</tr>
+<tr>
+<td>Encoding</td>
+<td>All text files read/written as UTF-8. Concat lists: UTF-8 <strong>without BOM</strong> (FR-5.3).</td>
+</tr>
+<tr>
+<td>Paths</td>
+<td><code>pathlib.Path</code> everywhere. Convert to string only when calling subprocess. Use <code>win_long(path)</code> (Section 5.9) for every OS file operation.</td>
+</tr>
+<tr>
+<td>Subprocess</td>
+<td><code>subprocess.Popen</code> / <code>subprocess.run</code> with <code>creationflags=subprocess.CREATE_NO_WINDOW</code> on Windows, <code>text=True, encoding="utf-8", errors="replace"</code>. Never <code>shell=True</code>.</td>
+</tr>
+<tr>
+<td>ffmpeg location</td>
+<td><code>config.ffmpeg_path</code> and <code>config.ffprobe_path</code>, relative to the <strong>application directory</strong> (Section 5.1 <code>app_dir()</code>), not to the current working directory.</td>
+</tr>
+<tr>
+<td>Output naming</td>
+<td><code>&lt;Camera&gt;_&lt;firstTs&gt;_to_&lt;lastTs&gt;[_partN].mp4</code> (FR-6.3). If timestamps are unavailable, use <code>&lt;Camera&gt;_&lt;firstFileStem&gt;_to_&lt;lastFileStem&gt;</code>.</td>
+</tr>
+<tr>
+<td>Temp files</td>
+<td><code>%TEMP%\DashCamMerger\&lt;runId&gt;\</code> for concat lists; <code>&lt;output&gt;\&lt;name&gt;.partial.mp4</code> during writing (FR-6.4).</td>
+</tr>
+<tr>
+<td>Run id</td>
+<td><code>runId = datetime.now().strftime("%Y%m%d_%H%M%S")</code>. Used in log file name and temp folder.</td>
+</tr>
+<tr>
+<td>Threads</td>
+<td>GUI: the core runs in one <code>threading.Thread</code>; cancellation via <code>threading.Event</code>. CLI: same core function, called directly on the main thread.</td>
+</tr>
+<tr>
+<td>Camera labels</td>
+<td>Exactly three strings: <code>"Front"</code>, <code>"Rear"</code>, <code>"Interior"</code>. Anything else is <code>"Unclassified"</code> or <code>"Skip"</code>.</td>
+</tr>
+<tr>
+<td>Version string</td>
+<td><code>__version__ = "1.0.0"</code> in <code>dashcam_merger/__init__.py</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="3-project-layout-normative">3. Project layout (normative)</h2>
 <pre><code>DashCamMerger\
   src\
@@ -162,11 +220,12 @@ li{margin:3px 0}
   README.txt
   CHANGELOG.md
   build.bat                          Section 15
-  DashCamMerger.spec                 PyInstaller spec (generated by build.bat on first run)</code></pre>
-<hr>
+  DashCamMerger.spec                 PyInstaller spec (generated by build.bat on first run)
+</code></pre>
+<hr />
 <h2 id="4-data-model-coremodelspy">4. Data model (<code>core/models.py</code>)</h2>
 <p>All classes are <code>@dataclass</code>. Use <code>slots=True</code> where possible. Use <code>field(default_factory=...)</code> for mutable defaults.</p>
-<pre><code>CameraLabel = Literal[&quot;Front&quot;, &quot;Rear&quot;, &quot;Interior&quot;, &quot;Unclassified&quot;, &quot;Skip&quot;]
+<pre><code class="language-python">CameraLabel = Literal[&quot;Front&quot;, &quot;Rear&quot;, &quot;Interior&quot;, &quot;Unclassified&quot;, &quot;Skip&quot;]
 OrderSource = Literal[&quot;timestamp&quot;, &quot;sequence&quot;, &quot;mtime&quot;]
 
 @dataclass(slots=True)
@@ -297,12 +356,13 @@ class RunOptions:                         # everything the CLI/GUI can set per r
     parallel: int | None = None
     dry_run: bool = False
     assume_yes: bool = False
-    verbose: bool = False</code></pre>
-<hr>
+    verbose: bool = False
+</code></pre>
+<hr />
 <h2 id="5-module-designs">5. Module designs</h2>
 <p>Each module lists: purpose, public functions (signature + contract), algorithm, errors, tests.</p>
 <h3 id="51-coreconfigpy-fr-10">5.1 <code>core/config.py</code> — FR-10</h3>
-<pre><code>DEFAULTS: dict = {
+<pre><code class="language-python">DEFAULTS: dict = {
   &quot;video_extensions&quot;: [&quot;.mp4&quot;, &quot;.mov&quot;, &quot;.avi&quot;, &quot;.ts&quot;, &quot;.mkv&quot;],
   &quot;output_subfolder&quot;: &quot;merged&quot;,
   &quot;probe_sample_every&quot;: 20,
@@ -320,31 +380,47 @@ class ConfigError(Exception): ...
 
 def app_dir() -&gt; Path
 def load_config(path: Path | None = None) -&gt; AppConfig
-def profile_from_dict(d: dict) -&gt; CameraProfile</code></pre>
+def profile_from_dict(d: dict) -&gt; CameraProfile
+</code></pre>
 <ul>
-<li><code>app_dir()</code>: if <code>getattr(sys, &quot;frozen&quot;, False)</code> return <code>Path(sys.executable).parent</code>, else return the repository root (<code>Path(__file__).resolve().parents[3]</code>). Every relative path in config is resolved against this.</li>
-<li><code>load_config()</code>: default path is <code>app_dir() / &quot;config.json&quot;</code>. If the file is missing, use <code>DEFAULTS</code> and log INFO <code>&quot;config.json not found, using defaults&quot;</code>. If present, parse JSON; on <code>json.JSONDecodeError</code> raise <code>ConfigError(f&quot;config.json line {e.lineno}: {e.msg}&quot;)</code> (Spec FR-10 "names the line"). Unknown keys: log WARNING and ignore. Missing keys: use default.</li>
+<li><code>app_dir()</code>: if <code>getattr(sys, "frozen", False)</code> return <code>Path(sys.executable).parent</code>,
+  else return the repository root (<code>Path(__file__).resolve().parents[3]</code>). Every relative path in
+  config is resolved against this.</li>
+<li><code>load_config()</code>: default path is <code>app_dir() / "config.json"</code>. If the file is missing, use <code>DEFAULTS</code>
+  and log INFO <code>"config.json not found, using defaults"</code>. If present, parse JSON; on
+  <code>json.JSONDecodeError</code> raise <code>ConfigError(f"config.json line {e.lineno}: {e.msg}")</code> (Spec FR-10
+  "names the line"). Unknown keys: log WARNING and ignore. Missing keys: use default.</li>
 <li>Validation (raise <code>ConfigError</code> with the key name in the message):</li>
-<ul>
 <li><code>video_extensions</code>: non-empty list of strings starting with <code>.</code>; lower-case them.</li>
-<li><code>probe_sample_every</code> ≥ 1; <code>gap_warning_seconds</code> ≥ 0; <code>gap_split_seconds</code> ≥ 0; <code>max_part_gb</code> ≥ 0; <code>parallel_jobs</code> in 1..8.</li>
-<li><code>ffmpeg_path</code>, <code>ffprobe_path</code>: resolve against <code>app_dir()</code>; do <strong>not</strong> check existence here (pipeline does, Section 6 step 0, so the error message can carry the expected path).</li>
-<li><code>camera_profiles</code>: each item needs <code>name</code> (str), <code>regex</code> (str, compiled with <code>re.IGNORECASE</code>, must contain group <code>cam</code>, else <code>ConfigError</code>), <code>map</code> (dict str→one of Front/Rear/Interior/Skip), optional <code>scope</code> in {"name","parent"} default "name". Keys of <code>map</code> are upper-cased.</li>
+<li><code>probe_sample_every</code> ≥ 1; <code>gap_warning_seconds</code> ≥ 0; <code>gap_split_seconds</code> ≥ 0;
+    <code>max_part_gb</code> ≥ 0; <code>parallel_jobs</code> in 1..8.</li>
+<li><code>ffmpeg_path</code>, <code>ffprobe_path</code>: resolve against <code>app_dir()</code>; do <strong>not</strong> check existence here
+    (pipeline does, Section 6 step 0, so the error message can carry the expected path).</li>
+<li><code>camera_profiles</code>: each item needs <code>name</code> (str), <code>regex</code> (str, compiled with <code>re.IGNORECASE</code>,
+    must contain group <code>cam</code>, else <code>ConfigError</code>), <code>map</code> (dict str→one of Front/Rear/Interior/Skip),
+    optional <code>scope</code> in {"name","parent"} default "name". Keys of <code>map</code> are upper-cased.</li>
 </ul>
-</ul>
-<p>Tests (<code>test_config.py</code>): defaults when missing; invalid JSON reports line number; unknown key ignored; <code>parallel_jobs: 9</code> → ConfigError mentions <code>parallel_jobs</code>; custom profile without <code>cam</code> group → ConfigError; relative ffmpeg path becomes absolute under <code>app_dir()</code>.</p>
+<p>Tests (<code>test_config.py</code>): defaults when missing; invalid JSON reports line number; unknown key
+ignored; <code>parallel_jobs: 9</code> → ConfigError mentions <code>parallel_jobs</code>; custom profile without <code>cam</code>
+group → ConfigError; relative ffmpeg path becomes absolute under <code>app_dir()</code>.</p>
 <h3 id="52-corelogging_setuppy-spec-9">5.2 <code>core/logging_setup.py</code> — Spec §9</h3>
-<pre><code>def setup_logging(run_id: str, verbose: bool, log_dir: Path | None = None) -&gt; Path
-def prune_old_logs(log_dir: Path, max_age_days: int = 30) -&gt; int</code></pre>
+<pre><code class="language-python">def setup_logging(run_id: str, verbose: bool, log_dir: Path | None = None) -&gt; Path
+def prune_old_logs(log_dir: Path, max_age_days: int = 30) -&gt; int
+</code></pre>
 <ul>
-<li><code>log_dir</code> default <code>app_dir() / &quot;logs&quot;</code>; create it. File name <code>merge_&lt;run_id&gt;.log</code>.</li>
-<li>Root logger <code>dashcam_merger</code>. File handler level DEBUG if <code>verbose</code> else INFO. Format: <code>%(asctime)s %(levelname)-7s %(name)s: %(message)s</code>.</li>
-<li>Also attach a <code>logging.handlers.QueueHandler</code>-like adapter? <strong>No.</strong> The GUI log pane is fed by <code>ProgressEvent</code> (Section 7), not by the logging module. Keep logging file-only. CLI adds a <code>StreamHandler</code> to stderr at WARNING level (so ffmpeg problems are visible) in <code>cli.py</code>.</li>
-<li><code>prune_old_logs</code>: delete only files matching <code>merge_*.log</code> inside <code>log_dir</code> older than <code>max_age_days</code>. Return count. This is the <strong>only</strong> delete in the whole program and it must be guarded: <code>assert log_dir.name == &quot;logs&quot;</code>.</li>
+<li><code>log_dir</code> default <code>app_dir() / "logs"</code>; create it. File name <code>merge_&lt;run_id&gt;.log</code>.</li>
+<li>Root logger <code>dashcam_merger</code>. File handler level DEBUG if <code>verbose</code> else INFO. Format:
+  <code>%(asctime)s %(levelname)-7s %(name)s: %(message)s</code>.</li>
+<li>Also attach a <code>logging.handlers.QueueHandler</code>-like adapter? <strong>No.</strong> The GUI log pane is fed by
+  <code>ProgressEvent</code> (Section 7), not by the logging module. Keep logging file-only. CLI adds a
+  <code>StreamHandler</code> to stderr at WARNING level (so ffmpeg problems are visible) in <code>cli.py</code>.</li>
+<li><code>prune_old_logs</code>: delete only files matching <code>merge_*.log</code> inside <code>log_dir</code> older than
+  <code>max_age_days</code>. Return count. This is the <strong>only</strong> delete in the whole program and it must
+  be guarded: <code>assert log_dir.name == "logs"</code>.</li>
 </ul>
 <h3 id="53-coresafe_iopy-fr-8-section-12">5.3 <code>core/safe_io.py</code> — FR-8 (Section 12)</h3>
 <p>The single place where files are created, renamed or removed. All other modules call these.</p>
-<pre><code>class SafetyViolation(Exception): ...
+<pre><code class="language-python">class SafetyViolation(Exception): ...
 
 class WriteGuard:
     def __init__(self, allowed_roots: list[Path]) -&gt; None
@@ -352,33 +428,58 @@ class WriteGuard:
     def mkdir(self, path: Path) -&gt; None
     def write_text(self, path: Path, text: str) -&gt; None   # utf-8, newline=&quot;\n&quot;, no BOM
     def rename(self, src: Path, dst: Path) -&gt; None
-    def unique_name(self, path: Path) -&gt; Path    # FR-6.2 appends _2, _3 ...</code></pre>
+    def unique_name(self, path: Path) -&gt; Path    # FR-6.2 appends _2, _3 ...
+</code></pre>
 <ul>
-<li><code>allowed_roots</code> for a run are exactly: <code>[output_dir, temp_dir]</code> (temp = <code>%TEMP%\DashCamMerger\&lt;runId&gt;</code>). The log folder is handled by <code>logging_setup</code> and not by <code>WriteGuard</code>.</li>
-<li><code>check()</code>: <code>p = path.resolve()</code>; pass if <code>p == root or root in p.parents</code> for some root; else raise <code>SafetyViolation(f&quot;Refusing to write outside output folder: {p}&quot;)</code>.</li>
+<li><code>allowed_roots</code> for a run are exactly: <code>[output_dir, temp_dir]</code> (temp = <code>%TEMP%\DashCamMerger\&lt;runId&gt;</code>).
+  The log folder is handled by <code>logging_setup</code> and not by <code>WriteGuard</code>.</li>
+<li><code>check()</code>: <code>p = path.resolve()</code>; pass if <code>p == root or root in p.parents</code> for some root; else raise
+  <code>SafetyViolation(f"Refusing to write outside output folder: {p}")</code>.</li>
 <li>Every method calls <code>check()</code> on every path argument first. <code>rename</code> checks both <code>src</code> and <code>dst</code>.</li>
-<li><code>unique_name(p)</code>: if <code>p</code> does not exist return <code>p</code>; else try <code>p.with_stem(f&quot;{p.stem}_{n}&quot;)</code> for n = 2, 3, … until free.</li>
+<li><code>unique_name(p)</code>: if <code>p</code> does not exist return <code>p</code>; else try <code>p.with_stem(f"{p.stem}_{n}")</code> for
+  n = 2, 3, … until free.</li>
 <li>There is <strong>no</strong> <code>delete</code>/<code>unlink</code> method. Do not add one.</li>
 </ul>
-<p>Tests (<code>test_safe_io</code> inside <code>test_planner.py</code> or own file): writing to input folder raises; writing to <code>output_dir/sub/file</code> allowed; <code>unique_name</code> yields <code>_2</code> then <code>_3</code>.</p>
+<p>Tests (<code>test_safe_io</code> inside <code>test_planner.py</code> or own file): writing to input folder raises;
+writing to <code>output_dir/sub/file</code> allowed; <code>unique_name</code> yields <code>_2</code> then <code>_3</code>.</p>
+<h4 id="531-corecleanuppy-fr-12-opt-in-exception-to-never-delete">5.3.1 <code>core/cleanup.py</code> — FR-12 (opt-in exception to "never delete")</h4>
+<p>A second, deliberately separate module — not routed through <code>WriteGuard</code> — that may
+permanently delete a <em>source</em> clip, and only that:</p>
+<pre><code class="language-python">def sources_for_deletion(results: list[PartResult]) -&gt; list[ClipInfo]
+    # clips of every result with status == &quot;PASS&quot;; FAIL/CANCELLED/SKIPPED are never included
+
+def delete_sources(clips: list[ClipInfo], protected_roots: list[Path]
+                   ) -&gt; tuple[list[Path], list[tuple[Path, str]]]
+    # os.remove() each clip not under a protected_root; returns (deleted, (path, error))
+</code></pre>
+<p><code>pipeline.run()</code> calls this only when <code>RunOptions.delete_source</code> is set, after <code>_finish()</code>
+has already produced the report, and only after <code>Confirmer.confirm_delete(clips)</code> returns
+<code>True</code> — a confirmation kept separate from the FR-2.4 plan confirmation (Section 6, step 11)
+so that an auto-confirmed merge (<code>--yes</code> for the plan) does not silently also authorize
+deletion; the GUI always shows its own warning dialog for this regardless of
+<code>assume_yes</code> (Section 9). <code>protected_roots</code> is always <code>[output_dir, temp_dir]</code>, so a bug
+elsewhere that mislabels a merged output as a "source" cannot delete it. The safety-grep
+test (13.3) allowlists <code>cleanup.py</code> by name alongside <code>logging_setup.py</code>.</p>
 <h3 id="54-corescannerpy-fr-1">5.4 <code>core/scanner.py</code> — FR-1</h3>
-<pre><code>def scan(input_dir: Path, extensions: list[str], recursive: bool,
-         output_subfolder: str) -&gt; list[ClipInfo]</code></pre>
-<p>Algorithm:</p>
-<ol>
-<li><code>input_dir = input_dir.resolve()</code>. If not a directory → raise <code>NotADirectoryError</code>.</li>
-<li>Iterate <code>input_dir.rglob(&quot;*&quot;)</code> if recursive else <code>input_dir.glob(&quot;*&quot;)</code>. Use <code>os.scandir</code> recursion if <code>rglob</code> proves slow; behaviour identical.</li>
-<li>Skip if any path part (relative to <code>input_dir</code>) equals <code>output_subfolder</code> case-insensitively (FR-1.3).</li>
-<li>Skip if <code>name.startswith(&quot;INCOMPLETE_DO_NOT_USE_&quot;)</code> (FR-1.4).</li>
-<li>Keep only regular files with <code>suffix.lower() in extensions</code>.</li>
-<li>Build <code>ClipInfo(path=p.resolve(), size_bytes=st.st_size, mtime=st.st_mtime)</code>.</li>
-<li>Return list sorted by <code>str(path).lower()</code> (deterministic; real ordering happens later).</li>
-<li>Log INFO: <code>&quot;Scanned {n} video files in {input_dir}&quot;</code>. Empty list is <strong>not</strong> an error here; the pipeline handles FR-1.5.</li>
-</ol>
-<p>Tests: nested folders found; <code>merged\</code> skipped; <code>INCOMPLETE_</code> skipped; extension case-insensitive; <code>--no-recursive</code> sees only top level.</p>
+<pre><code class="language-python">def scan(input_dir: Path, extensions: list[str], recursive: bool,
+         output_subfolder: str) -&gt; list[ClipInfo]
+</code></pre>
+<p>Algorithm:
+1. <code>input_dir = input_dir.resolve()</code>. If not a directory → raise <code>NotADirectoryError</code>.
+2. Iterate <code>input_dir.rglob("*")</code> if recursive else <code>input_dir.glob("*")</code>. Use <code>os.scandir</code>
+   recursion if <code>rglob</code> proves slow; behaviour identical.
+3. Skip if any path part (relative to <code>input_dir</code>) equals <code>output_subfolder</code> case-insensitively (FR-1.3).
+4. Skip if <code>name.startswith("INCOMPLETE_DO_NOT_USE_")</code> (FR-1.4).
+5. Keep only regular files with <code>suffix.lower() in extensions</code>.
+6. Build <code>ClipInfo(path=p.resolve(), size_bytes=st.st_size, mtime=st.st_mtime)</code>.
+7. Return list sorted by <code>str(path).lower()</code> (deterministic; real ordering happens later).
+8. Log INFO: <code>"Scanned {n} video files in {input_dir}"</code>. Empty list is <strong>not</strong> an error here; the
+   pipeline handles FR-1.5.</p>
+<p>Tests: nested folders found; <code>merged\</code> skipped; <code>INCOMPLETE_</code> skipped; extension case-insensitive;
+<code>--no-recursive</code> sees only top level.</p>
 <h3 id="55-corecameraspy-fr-2">5.5 <code>core/cameras.py</code> — FR-2</h3>
 <h4 id="551-built-in-profiles-normative-in-this-order">5.5.1 Built-in profiles (normative, in this order)</h4>
-<pre><code>BUILTIN_PROFILES: list[CameraProfile] = [
+<pre><code class="language-python">BUILTIN_PROFILES: list[CameraProfile] = [
   CameraProfile(&quot;Xforce&quot;, &quot;name&quot;,
       re.compile(r&quot;^(?P&lt;ts&gt;\d{14})_(?P&lt;seq&gt;\d+)(?P&lt;cam&gt;[FR])\.(?:mp4|mov)$&quot;, re.I),
       {&quot;F&quot;: &quot;Front&quot;, &quot;R&quot;: &quot;Rear&quot;}),
@@ -401,10 +502,11 @@ class WriteGuard:
        &quot;BACK&quot;: &quot;Rear&quot;, &quot;B&quot;: &quot;Rear&quot;, &quot;INTERIOR&quot;: &quot;Interior&quot;, &quot;INSIDE&quot;: &quot;Interior&quot;,
        &quot;CABIN&quot;: &quot;Interior&quot;, &quot;I&quot;: &quot;Interior&quot;}),
 ]
-MATCH_THRESHOLD = 0.90</code></pre>
+MATCH_THRESHOLD = 0.90
+</code></pre>
 <p>User profiles from <code>config.camera_profiles</code> are tried <strong>before</strong> the built-ins.</p>
 <h4 id="552-public-functions">5.5.2 Public functions</h4>
-<pre><code>@dataclass(slots=True)
+<pre><code class="language-python">@dataclass(slots=True)
 class DetectionResult:
     profile_name: str | None            # None when no profile reached threshold
     matched_ratio: float
@@ -416,18 +518,39 @@ def extract_tokens(clips: list[ClipInfo]) -&gt; dict[str, list[ClipInfo]]
 def apply_manual_map(clips: list[ClipInfo], tokens: dict[str, list[ClipInfo]],
                      mapping: dict[str, CameraLabel]) -&gt; None
 def parse_camera_map_arg(text: str) -&gt; dict[str, CameraLabel]                 # CLI --camera-map
-def group_by_camera(clips: list[ClipInfo]) -&gt; tuple[list[CameraGroup], list[ClipInfo]]</code></pre>
+def group_by_camera(clips: list[ClipInfo]) -&gt; tuple[list[CameraGroup], list[ClipInfo]]
+</code></pre>
 <ul>
-<li><code>apply_profile</code>: for each clip, subject = <code>clip.path.name</code> if scope == "name" else <code>clip.path.parent.name</code>. <code>m = profile.regex.search(subject)</code>. If <code>m</code> and <code>m[&quot;cam&quot;].upper()</code> in <code>profile.map</code>: set <code>clip.camera = map[...]</code>, <code>clip.camera_token = m[&quot;cam&quot;].upper()</code>, count += 1. Also, if the regex has groups <code>ts</code> / <code>seq</code>, store them in <code>clip.timestamp</code> / <code>clip.sequence</code> (parse with <code>ordering.parse_timestamp_14</code>) — this saves a second pass for Xforce.</li>
-<li><code>detect</code>: for each profile in <code>user_profiles + BUILTIN_PROFILES</code>: reset all clips to Unclassified, run <code>apply_profile</code>, <code>ratio = matched / len(clips)</code>. First profile with <code>ratio &gt;= MATCH_THRESHOLD</code> wins: leave its assignments in place, return <code>DetectionResult(profile.name, ratio, {})</code>. If none wins: reset all clips to Unclassified and return <code>DetectionResult(None, best_ratio, extract_tokens(clips))</code>.</li>
-<li><code>extract_tokens</code> (used for the manual dialog, FR-2.3): if the clips have more than one distinct parent folder → token = <code>&quot;folder:&quot; + parent.name</code>. Otherwise token = the alphabetic run immediately before the extension, regex <code>([A-Za-z]+)\.[A-Za-z0-9]+$</code> on the name, upper-cased; if no match token = <code>&quot;ALL&quot;</code>. Return dict token → clips, tokens sorted alphabetically.</li>
-<li><code>apply_manual_map</code>: for each token in <code>tokens</code>, label = <code>mapping.get(token.upper(), &quot;Unclassified&quot;)</code>; assign to every clip of that token. <code>&quot;Skip&quot;</code> clips are set to camera <code>&quot;Skip&quot;</code> and are excluded from groups.</li>
-<li><code>parse_camera_map_arg(&quot;F=Front,R=Rear,folder:Normal=Front&quot;)</code>: split on <code>,</code>, then on the first <code>=</code>; key upper-cased; value must be one of Front/Rear/Interior/Skip (case-insensitive, normalised); else raise <code>ValueError(f&quot;--camera-map: invalid entry &#x27;{entry}&#x27;&quot;)</code>.</li>
-<li><code>group_by_camera</code>: returns groups for Front, Rear, Interior in that fixed order (only those with ≥1 clip) and the list of Unclassified clips. <code>Skip</code> clips are dropped silently but logged.</li>
+<li><code>apply_profile</code>: for each clip, subject = <code>clip.path.name</code> if scope == "name" else
+  <code>clip.path.parent.name</code>. <code>m = profile.regex.search(subject)</code>. If <code>m</code> and <code>m["cam"].upper()</code> in
+  <code>profile.map</code>: set <code>clip.camera = map[...]</code>, <code>clip.camera_token = m["cam"].upper()</code>, count += 1.
+  Also, if the regex has groups <code>ts</code> / <code>seq</code>, store them in <code>clip.timestamp</code> / <code>clip.sequence</code>
+  (parse with <code>ordering.parse_timestamp_14</code>) — this saves a second pass for Xforce.</li>
+<li><code>detect</code>: for each profile in <code>user_profiles + BUILTIN_PROFILES</code>: reset all clips to
+  Unclassified, run <code>apply_profile</code>, <code>ratio = matched / len(clips)</code>. First profile with
+  <code>ratio &gt;= MATCH_THRESHOLD</code> wins: leave its assignments in place, return
+  <code>DetectionResult(profile.name, ratio, {})</code>. If none wins: reset all clips to Unclassified and return
+  <code>DetectionResult(None, best_ratio, extract_tokens(clips))</code>.</li>
+<li><code>extract_tokens</code> (used for the manual dialog, FR-2.3): if the clips have more than one distinct
+  parent folder → token = <code>"folder:" + parent.name</code>. Otherwise token = the alphabetic run
+  immediately before the extension, regex <code>([A-Za-z]+)\.[A-Za-z0-9]+$</code> on the name, upper-cased;
+  if no match token = <code>"ALL"</code>. Return dict token → clips, tokens sorted alphabetically.</li>
+<li><code>apply_manual_map</code>: for each token in <code>tokens</code>, label = <code>mapping.get(token.upper(), "Unclassified")</code>;
+  assign to every clip of that token. <code>"Skip"</code> clips are set to camera <code>"Skip"</code> and are excluded
+  from groups.</li>
+<li><code>parse_camera_map_arg("F=Front,R=Rear,folder:Normal=Front")</code>: split on <code>,</code>, then on the first <code>=</code>;
+  key upper-cased; value must be one of Front/Rear/Interior/Skip (case-insensitive, normalised);
+  else raise <code>ValueError(f"--camera-map: invalid entry '{entry}'")</code>.</li>
+<li><code>group_by_camera</code>: returns groups for Front, Rear, Interior in that fixed order (only those with
+  ≥1 clip) and the list of Unclassified clips. <code>Skip</code> clips are dropped silently but logged.</li>
 </ul>
-<p>Tests: each built-in profile against 3 sample names (Xforce <code>20260831152516_0015340F.MP4</code>, suffix <code>clip_R.mp4</code>, word <code>REAR_001.mp4</code>, CamN <code>CAM2_001.mp4</code>, 70mai <code>NO20260831-152516-000001B.mp4</code>, folder <code>Rear\001.mp4</code>); threshold: 9 matching + 1 odd file → profile chosen with odd file Unclassified; 8/10 → <code>profile_name is None</code> and tokens populated; user profile takes precedence; <code>parse_camera_map_arg</code> accepts and rejects properly.</p>
+<p>Tests: each built-in profile against 3 sample names (Xforce <code>20260831152516_0015340F.MP4</code>,
+suffix <code>clip_R.mp4</code>, word <code>REAR_001.mp4</code>, CamN <code>CAM2_001.mp4</code>, 70mai <code>NO20260831-152516-000001B.mp4</code>,
+folder <code>Rear\001.mp4</code>); threshold: 9 matching + 1 odd file → profile chosen with odd file
+Unclassified; 8/10 → <code>profile_name is None</code> and tokens populated; user profile takes precedence;
+<code>parse_camera_map_arg</code> accepts and rejects properly.</p>
 <h3 id="56-coreorderingpy-fr-3">5.6 <code>core/ordering.py</code> — FR-3</h3>
-<pre><code>TS14 = re.compile(r&quot;(?&lt;!\d)(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?!\d)&quot;)
+<pre><code class="language-python">TS14 = re.compile(r&quot;(?&lt;!\d)(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?!\d)&quot;)
 TS_SEP = re.compile(r&quot;(?&lt;!\d)(\d{4})[-_]?(\d{2})[-_]?(\d{2})[-_T ](\d{2})[-_:.]?(\d{2})[-_:.]?(\d{2})(?!\d)&quot;)
 SEQ = re.compile(r&quot;(?&lt;!\d)(\d{3,})(?!\d)&quot;)
 
@@ -436,160 +559,258 @@ def parse_timestamp(name: str) -&gt; datetime | None
 def parse_sequence(name: str, timestamp_span: tuple[int, int] | None) -&gt; int | None
 def annotate(clips: list[ClipInfo]) -&gt; None
 def order_group(group: CameraGroup) -&gt; None
-def detect_gaps(group: CameraGroup, warn_seconds: int) -&gt; None</code></pre>
+def detect_gaps(group: CameraGroup, warn_seconds: int) -&gt; None
+</code></pre>
 <ul>
-<li><code>parse_timestamp</code>: try <code>TS14</code> then <code>TS_SEP</code> on the file <strong>stem</strong>. Validate with <code>datetime(y, m, d, H, M, S)</code> inside <code>try/except ValueError</code> → invalid dates return None and the next match of the same regex is tried (<code>finditer</code>). Return the first valid one. Record the span of the match for <code>parse_sequence</code>.</li>
-<li><code>parse_sequence</code>: find all <code>SEQ</code> matches on the stem that do <strong>not</strong> overlap the timestamp span; return <code>int</code> of the <strong>last</strong> one; None if no match.</li>
-<li><code>annotate</code>: for each clip with <code>timestamp is None</code>, call <code>parse_timestamp</code>; then <code>parse_sequence</code>. (Clips that got these from the camera profile keep them.)</li>
+<li><code>parse_timestamp</code>: try <code>TS14</code> then <code>TS_SEP</code> on the file <strong>stem</strong>. Validate with
+  <code>datetime(y, m, d, H, M, S)</code> inside <code>try/except ValueError</code> → invalid dates return None and the
+  next match of the same regex is tried (<code>finditer</code>). Return the first valid one. Record the
+  span of the match for <code>parse_sequence</code>.</li>
+<li><code>parse_sequence</code>: find all <code>SEQ</code> matches on the stem that do <strong>not</strong> overlap the timestamp span;
+  return <code>int</code> of the <strong>last</strong> one; None if no match.</li>
+<li><code>annotate</code>: for each clip with <code>timestamp is None</code>, call <code>parse_timestamp</code>; then <code>parse_sequence</code>.
+  (Clips that got these from the camera profile keep them.)</li>
 <li><code>order_group</code> (FR-3.1, FR-3.2):</li>
-<ol>
-<li><code>if all(c.timestamp for c in clips)</code>: <code>order_source = &quot;timestamp&quot;</code>, key <code>(c.timestamp, c.sequence or 0, c.path.name.lower())</code>.</li>
-<li><code>elif all(c.sequence is not None for c in clips)</code>: <code>order_source = &quot;sequence&quot;</code>, key <code>(c.sequence, c.path.name.lower())</code>.</li>
-<li><code>else</code>: <code>order_source = &quot;mtime&quot;</code>, key <code>(c.mtime, c.path.name.lower())</code> (FR-3.3 warning is added by the planner).</li>
-</ol>
+<li><code>if all(c.timestamp for c in clips)</code>: <code>order_source = "timestamp"</code>, key <code>(c.timestamp, c.sequence or 0, c.path.name.lower())</code>.</li>
+<li><code>elif all(c.sequence is not None for c in clips)</code>: <code>order_source = "sequence"</code>, key <code>(c.sequence, c.path.name.lower())</code>.</li>
+<li><code>else</code>: <code>order_source = "mtime"</code>, key <code>(c.mtime, c.path.name.lower())</code> (FR-3.3 warning is added by the planner).
+  Sort in place with <code>list.sort(key=...)</code> (stable).</li>
+<li><code>detect_gaps</code> (FR-3.4): only when <code>order_source == "timestamp"</code>. For consecutive clips a, b:
+  <code>gap = (b.timestamp - a.timestamp).total_seconds() - a_duration</code> where <code>a_duration</code> is
+  <code>a.probe.duration</code> if probed else <code>60.0</code> (typical clip). If <code>gap &gt; warn_seconds</code> append
+  <code>(a, b, gap)</code> to <code>group.gaps</code>. Note: the planner calls <code>detect_gaps</code> <strong>after</strong> probing so real
+  durations are used whenever sampled.</li>
 </ul>
-<p>Sort in place with <code>list.sort(key=...)</code> (stable).</p>
-<ul>
-<li><code>detect_gaps</code> (FR-3.4): only when <code>order_source == &quot;timestamp&quot;</code>. For consecutive clips a, b: <code>gap = (b.timestamp - a.timestamp).total_seconds() - a_duration</code> where <code>a_duration</code> is <code>a.probe.duration</code> if probed else <code>60.0</code> (typical clip). If <code>gap &gt; warn_seconds</code> append <code>(a, b, gap)</code> to <code>group.gaps</code>. Note: the planner calls <code>detect_gaps</code> <strong>after</strong> probing so real durations are used whenever sampled.</li>
-</ul>
-<p>Tests: 14-digit and separated timestamps; invalid date <code>20261399...</code> ignored; sequence picks the last ≥3-digit run outside the timestamp; group order by timestamp regardless of list order; mtime fallback selected when one clip lacks timestamp; gap of 10 minutes detected with 60-second clips.</p>
+<p>Tests: 14-digit and separated timestamps; invalid date <code>20261399...</code> ignored; sequence picks the
+last ≥3-digit run outside the timestamp; group order by timestamp regardless of list order; mtime
+fallback selected when one clip lacks timestamp; gap of 10 minutes detected with 60-second clips.</p>
 <h3 id="57-coreprobepy-fr-4-fr-71">5.7 <code>core/probe.py</code> — FR-4, FR-7.1</h3>
-<pre><code>class ProbeError(Exception): ...
+<pre><code class="language-python">class ProbeError(Exception): ...
 
 def ffprobe_json(ffprobe: Path, file: Path, timeout: int = 60) -&gt; dict
 def probe_clip(ffprobe: Path, clip: ClipInfo) -&gt; ProbeResult      # sets clip.probe or clip.unreadable
 def probe_output(ffprobe: Path, file: Path) -&gt; tuple[float, int]    # (duration, size) FR-7.1
 def signature_from_json(data: dict) -&gt; StreamSignature
-def sample_indices(n: int, every: int) -&gt; list[int]</code></pre>
+def sample_indices(n: int, every: int) -&gt; list[int]
+</code></pre>
 <ul>
-<li>Command (normative): <code>[ffprobe, &quot;-v&quot;, &quot;error&quot;, &quot;-print_format&quot;, &quot;json&quot;, &quot;-show_format&quot;, &quot;-show_streams&quot;, str(file)]</code></li>
-<li><code>ffprobe_json</code>: run with <code>subprocess.run(..., capture_output=True, timeout=timeout)</code>. If exit code ≠ 0 or stdout is not JSON → raise <code>ProbeError(stderr.strip()[:300] or &quot;ffprobe failed&quot;)</code>.</li>
-<li><code>signature_from_json</code>: first stream with <code>codec_type == &quot;video&quot;</code> → v fields (<code>width</code>, <code>height</code> as int, <code>r_frame_rate</code>, <code>pix_fmt</code>, default <code>&quot;&quot;</code> when missing). First <code>audio</code> stream → a fields; if none: <code>(&quot;none&quot;, 0, 0)</code>. No video stream → <code>ProbeError(&quot;no video stream&quot;)</code>.</li>
-<li><code>probe_clip</code>: on success set <code>clip.probe</code>; on <code>ProbeError</code> or <code>subprocess.TimeoutExpired</code> set <code>clip.unreadable = True</code>, <code>clip.unreadable_reason = str(e)</code>, log WARNING, and return None (FR-4.5).</li>
-<li><code>probe_output</code>: same command, returns <code>(float(format.duration), int(format.size))</code>; raises <code>ProbeError</code> on any failure (e.g. "moov atom not found" text comes back in stderr).</li>
-<li><code>sample_indices(n, every)</code>: <code>sorted(set([0, n-1] + list(range(0, n, every))))</code> for n ≥ 1; <code>[]</code> for n = 0.</li>
+<li>Command (normative):
+  <code>[ffprobe, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(file)]</code></li>
+<li><code>ffprobe_json</code>: run with <code>subprocess.run(..., capture_output=True, timeout=timeout)</code>. If exit
+  code ≠ 0 or stdout is not JSON → raise <code>ProbeError(stderr.strip()[:300] or "ffprobe failed")</code>.</li>
+<li><code>signature_from_json</code>: first stream with <code>codec_type == "video"</code> → v fields (<code>width</code>, <code>height</code>
+  as int, <code>r_frame_rate</code>, <code>pix_fmt</code>, default <code>""</code> when missing). First <code>audio</code> stream → a fields;
+  if none: <code>("none", 0, 0)</code>. No video stream → <code>ProbeError("no video stream")</code>.</li>
+<li><code>probe_clip</code>: on success set <code>clip.probe</code>; on <code>ProbeError</code> or <code>subprocess.TimeoutExpired</code> set
+  <code>clip.unreadable = True</code>, <code>clip.unreadable_reason = str(e)</code>, log WARNING, and return None (FR-4.5).</li>
+<li><code>probe_output</code>: same command, returns <code>(float(format.duration), int(format.size))</code>; raises
+  <code>ProbeError</code> on any failure (e.g. "moov atom not found" text comes back in stderr).</li>
+<li><code>sample_indices(n, every)</code>: <code>sorted(set([0, n-1] + list(range(0, n, every))))</code> for n ≥ 1;
+  <code>[]</code> for n = 0.</li>
 </ul>
-<p>Tests: parse a saved ffprobe JSON fixture (video+audio, video only); <code>sample_indices(50, 20)</code> → <code>[0, 20, 40, 49]</code>; <code>sample_indices(1, 20)</code> → <code>[0]</code>; a text file as input marks clip unreadable (integration, needs ffprobe).</p>
+<p>Tests: parse a saved ffprobe JSON fixture (video+audio, video only); <code>sample_indices(50, 20)</code> →
+<code>[0, 20, 40, 49]</code>; <code>sample_indices(1, 20)</code> → <code>[0]</code>; a text file as input marks clip unreadable
+(integration, needs ffprobe).</p>
 <h3 id="58-coreplannerpy-fr-24-fr-3335-fr-4344-fr-63-fr-68">5.8 <code>core/planner.py</code> — FR-2.4, FR-3.3–3.5, FR-4.3–4.4, FR-6.3, FR-6.8</h3>
-<pre><code>def build_plan(clips: list[ClipInfo], cfg: AppConfig, opt: RunOptions,
-               ffprobe: Path, run_id: str, progress: ProgressSink) -&gt; MergePlan</code></pre>
+<pre><code class="language-python">def build_plan(clips: list[ClipInfo], cfg: AppConfig, opt: RunOptions,
+               ffprobe: Path, run_id: str, progress: ProgressSink) -&gt; MergePlan
+</code></pre>
 <p>Steps (in order):</p>
 <ol>
 <li><strong>Group</strong>: <code>groups, unclassified = cameras.group_by_camera(clips)</code>.</li>
-<li><strong>Annotate &amp; order</strong>: <code>ordering.annotate(all clips)</code>; for each group <code>ordering.order_group(g)</code>; if <code>g.order_source == &quot;mtime&quot;</code> add warning <code>f&quot;{g.camera}: order based on file modification time, please spot-check&quot;</code> (FR-3.3); if <code>&quot;sequence&quot;</code> add <code>f&quot;{g.camera}: order based on sequence number in filename&quot;</code>.</li>
-<li><strong>Sample probe</strong> (FR-4.1): for each group, for <code>i in sample_indices(len(clips), cfg.probe_sample_every)</code> call <code>probe_clip</code>. Emit <code>ProgressEvent(kind=&quot;probe&quot;, ...)</code> per file.</li>
-<li><strong>Signature check</strong> (FR-4.3/4.4): <code>sigs = {c.probe.signature for c in sampled if c.probe}</code>. If <code>len(sigs) &gt; 1</code> <strong>or</strong> any sampled clip is unreadable: probe <strong>every</strong> clip in the group (unreadable ones stay flagged and are removed from the group into <code>plan.unreadable</code>).</li>
-<li><strong>Gaps</strong>: <code>ordering.detect_gaps(g, cfg.gap_warning_seconds)</code>; for each gap add warning <code>f&quot;{g.camera}: gap of {gap/60:.1f} min between {a.name} and {b.name}&quot;</code> (FR-3.4).</li>
-<li><strong>Split into parts</strong> — produce <code>list[list[ClipInfo]]</code> per group by walking clips in order and starting a new part when any rule fires; record <code>split_reason</code> on the new part:</li>
-<ul>
-<li><code>codec change</code>: when the group was fully probed, <code>reencode</code> is False, and <code>clip.probe.signature != current_part_signature</code>. (With <code>opt.reencode</code> True never split for this reason; the single part gets <code>reencode=True</code> and <code>signature=None</code>.)</li>
+<li><strong>Annotate &amp; order</strong>: <code>ordering.annotate(all clips)</code>; for each group <code>ordering.order_group(g)</code>;
+   if <code>g.order_source == "mtime"</code> add warning
+   <code>f"{g.camera}: order based on file modification time, please spot-check"</code> (FR-3.3);
+   if <code>"sequence"</code> add <code>f"{g.camera}: order based on sequence number in filename"</code>.</li>
+<li><strong>Sample probe</strong> (FR-4.1): for each group, for <code>i in sample_indices(len(clips), cfg.probe_sample_every)</code>
+   call <code>probe_clip</code>. Emit <code>ProgressEvent(kind="probe", ...)</code> per file.</li>
+<li><strong>Signature check</strong> (FR-4.3/4.4): <code>sigs = {c.probe.signature for c in sampled if c.probe}</code>.
+   If <code>len(sigs) &gt; 1</code> <strong>or</strong> any sampled clip is unreadable: probe <strong>every</strong> clip in the group
+   (unreadable ones stay flagged and are removed from the group into <code>plan.unreadable</code>).</li>
+<li><strong>Gaps</strong>: <code>ordering.detect_gaps(g, cfg.gap_warning_seconds)</code>; for each gap add warning
+   <code>f"{g.camera}: gap of {gap/60:.1f} min between {a.name} and {b.name}"</code> (FR-3.4).</li>
+<li><strong>Split into parts</strong> — produce <code>list[list[ClipInfo]]</code> per group by walking clips in order and
+   starting a new part when any rule fires; record <code>split_reason</code> on the new part:</li>
+<li><code>codec change</code>: when the group was fully probed, <code>reencode</code> is False, and
+     <code>clip.probe.signature != current_part_signature</code>. (With <code>opt.reencode</code> True never split for this reason; the single part gets <code>reencode=True</code> and <code>signature=None</code>.)</li>
 <li><code>trip gap</code>: <code>split_on_gap</code> effective value is True and the gap before this clip exceeds <code>cfg.gap_split_seconds</code>. (FR-3.5)</li>
 <li><code>max part size</code>: <code>max_part_gb &gt; 0</code> and <code>current_part_bytes + clip.size_bytes &gt; max_part_gb * 1024**3</code> and the current part is not empty. (FR-6.8)</li>
-</ul>
-<li><strong>Name outputs</strong> (FR-6.3): <code>first = part.clips[0]</code>, <code>last = part.clips[-1]</code>; <code>ts(c) = c.timestamp.strftime(&quot;%Y%m%d%H%M%S&quot;) if c.timestamp else c.path.stem</code>; <code>name = f&quot;{camera}_{ts(first)}_to_{ts(last)}&quot;</code>; if <code>part_count &gt; 1</code> append <code>f&quot;_part{part_index}&quot;</code>; extension <code>.mp4</code>. <code>output_path = output_dir / name.mp4</code>. If it exists and not <code>opt.overwrite</code>: <code>output_path = guard.unique_name(output_path)</code> (FR-6.2). <code>partial_path = output_dir / f&quot;{final_stem}.partial.mp4&quot;</code>. <code>list_path = temp_dir / f&quot;{final_stem}.txt&quot;</code> (or <code>output_dir / ...</code> when <code>opt.keep_lists</code>).</li>
-<li><strong>Expected totals</strong>: <code>expected_duration = sum(c.probe.duration for c in clips if c.probe)</code> plus, for un-probed clips, they are probed lazily in verify (FR-7.2). Set <code>expected_size = sum(c.size_bytes)</code>.</li>
+<li><strong>Name outputs</strong> (FR-6.3): <code>first = part.clips[0]</code>, <code>last = part.clips[-1]</code>;
+   <code>ts(c) = c.timestamp.strftime("%Y%m%d%H%M%S") if c.timestamp else c.path.stem</code>;
+   <code>name = f"{camera}_{ts(first)}_to_{ts(last)}"</code>; if <code>part_count &gt; 1</code> append <code>f"_part{part_index}"</code>;
+   extension <code>.mp4</code>. <code>output_path = output_dir / name.mp4</code>. If it exists and not <code>opt.overwrite</code>:
+   <code>output_path = guard.unique_name(output_path)</code> (FR-6.2). <code>partial_path = output_dir / f"{final_stem}.partial.mp4"</code>.
+   <code>list_path = temp_dir / f"{final_stem}.txt"</code> (or <code>output_dir / ...</code> when <code>opt.keep_lists</code>).</li>
+<li><strong>Expected totals</strong>: <code>expected_duration = sum(c.probe.duration for c in clips if c.probe)</code>
+   plus, for un-probed clips, they are probed lazily in verify (FR-7.2). Set
+   <code>expected_size = sum(c.size_bytes)</code>.</li>
 <li><strong>Commands</strong>: <code>plan.ffmpeg_commands = [concat.build_command(...) for each part]</code> (for dry-run display).</li>
-<li>Return the plan. Also emit <code>ProgressEvent(kind=&quot;plan&quot;, plan=plan)</code> so the CLI/GUI can show the summary table (FR-2.4).</li>
+<li>Return the plan. Also emit <code>ProgressEvent(kind="plan", plan=plan)</code> so the CLI/GUI can show the
+    summary table (FR-2.4).</li>
 </ol>
-<p>Tests (<code>test_planner.py</code>, pure unit with fake probe results injected on <code>ClipInfo.probe</code>): uniform signature → one part; signature change in the middle → two parts with reason <code>codec change</code>; <code>reencode=True</code> → one part with <code>reencode=True</code>; <code>max_part_gb=1</code> with 3×0.6 GB clips → two parts; names follow FR-6.3 pattern; existing output → <code>_2</code> suffix; <code>split_on_gap</code> splits at a 40-minute gap.</p>
+<p>Tests (<code>test_planner.py</code>, pure unit with fake probe results injected on <code>ClipInfo.probe</code>):
+uniform signature → one part; signature change in the middle → two parts with reason
+<code>codec change</code>; <code>reencode=True</code> → one part with <code>reencode=True</code>; <code>max_part_gb=1</code> with 3×0.6 GB
+clips → two parts; names follow FR-6.3 pattern; existing output → <code>_2</code> suffix; <code>split_on_gap</code> splits
+at a 40-minute gap.</p>
 <h3 id="59-corewinpathpy-spec-7-long-paths">5.9 <code>core/winpath.py</code> — Spec §7 (long paths)</h3>
-<pre><code>def win_long(path: Path) -&gt; str</code></pre>
+<pre><code class="language-python">def win_long(path: Path) -&gt; str
+</code></pre>
 <ul>
-<li>On Windows (<code>os.name == &quot;nt&quot;</code>): <code>s = str(path.resolve())</code>; if <code>s.startswith(&quot;\\\\?\\&quot;)</code> return as is; if UNC (<code>s.startswith(&quot;\\\\&quot;)</code>) return <code>&quot;\\\\?\\UNC\\&quot; + s[2:]</code>; else return <code>&quot;\\\\?\\&quot; + s</code>.</li>
+<li>On Windows (<code>os.name == "nt"</code>): <code>s = str(path.resolve())</code>; if <code>s.startswith("\\\\?\\")</code> return
+  as is; if UNC (<code>s.startswith("\\\\")</code>) return <code>"\\\\?\\UNC\\" + s[2:]</code>; else return <code>"\\\\?\\" + s</code>.</li>
 <li>Elsewhere return <code>str(path)</code>.</li>
-<li>Used for: <code>open()</code>, <code>os.rename</code>, <code>os.stat</code>, <code>os.makedirs</code>, and as the argument passed to ffprobe/ffmpeg (ffmpeg accepts <code>\\?\</code> paths on Windows). Inside concat list files use <code>path.resolve().as_posix()</code> <strong>without</strong> the prefix (ffmpeg's concat demuxer handles normal absolute paths; the <code>\\?\</code> form breaks its quoting).</li>
+<li>Used for: <code>open()</code>, <code>os.rename</code>, <code>os.stat</code>, <code>os.makedirs</code>, and as the argument passed to
+  ffprobe/ffmpeg (ffmpeg accepts <code>\\?\</code> paths on Windows). Inside concat list files use
+  <code>path.resolve().as_posix()</code> <strong>without</strong> the prefix (ffmpeg's concat demuxer handles normal absolute paths; the <code>\\?\</code> form breaks its quoting).</li>
 </ul>
 <h3 id="510-coreconcatpy-fr-5-fr-6">5.10 <code>core/concat.py</code> — FR-5, FR-6</h3>
-<pre><code>def write_concat_list(guard: WriteGuard, list_path: Path, clips: list[ClipInfo]) -&gt; None
+<pre><code class="language-python">def write_concat_list(guard: WriteGuard, list_path: Path, clips: list[ClipInfo]) -&gt; None
 def escape_concat_path(p: Path) -&gt; str
 def build_command(ffmpeg: Path, part: OutputPart) -&gt; list[str]
 def run_ffmpeg(cmd: list[str], expected_duration: float, cancel: threading.Event,
-               progress: ProgressSink, part: OutputPart) -&gt; int   # returns exit code, -1 if cancelled</code></pre>
+               progress: ProgressSink, part: OutputPart) -&gt; int   # returns exit code, -1 if cancelled
+</code></pre>
 <ul>
-<li><code>escape_concat_path</code>: <code>s = p.resolve().as_posix()</code>; <code>s = s.replace(&quot;&#x27;&quot;, &quot;&#x27;\\&#x27;&#x27;&quot;)</code>; return <code>f&quot;file &#x27;{s}&#x27;&quot;</code> (FR-5.2).</li>
-<li><code>write_concat_list</code>: lines joined by <code>&quot;\n&quot;</code> plus trailing newline, written through <code>guard.write_text</code> (UTF-8, no BOM, FR-5.3).</li>
+<li><code>escape_concat_path</code>: <code>s = p.resolve().as_posix()</code>; <code>s = s.replace("'", "'\\''")</code>;
+  return <code>f"file '{s}'"</code> (FR-5.2).</li>
+<li><code>write_concat_list</code>: lines joined by <code>"\n"</code> plus trailing newline, written through
+  <code>guard.write_text</code> (UTF-8, no BOM, FR-5.3).</li>
 <li><code>build_command</code> (normative):</li>
-<ul>
-<li>Stream copy (FR-6.1): <code>[ffmpeg, &quot;-y&quot;, &quot;-hide_banner&quot;, &quot;-nostats&quot;, &quot;-loglevel&quot;, &quot;error&quot;, &quot;-progress&quot;, &quot;pipe:1&quot;, &quot;-f&quot;, &quot;concat&quot;, &quot;-safe&quot;, &quot;0&quot;, &quot;-i&quot;, str(list_path), &quot;-c&quot;, &quot;copy&quot;, &quot;-movflags&quot;, &quot;+faststart&quot;, str(partial_path)]</code></li>
-<li>Re-encode (FR-4.4, only when <code>part.reencode</code>): replace <code>&quot;-c&quot;, &quot;copy&quot;</code> by <code>&quot;-c:v&quot;, &quot;libx264&quot;, &quot;-crf&quot;, &quot;18&quot;, &quot;-preset&quot;, &quot;medium&quot;, &quot;-c:a&quot;, &quot;aac&quot;</code>.</li>
-</ul>
+<li>Stream copy (FR-6.1):
+    <code>[ffmpeg, "-y", "-hide_banner", "-nostats", "-loglevel", "error", "-progress", "pipe:1",
+      "-f", "concat", "-safe", "0", "-i", str(list_path), "-c", "copy", "-movflags", "+faststart",
+      str(partial_path)]</code></li>
+<li>Re-encode (FR-4.4, only when <code>part.reencode</code>):
+    replace <code>"-c", "copy"</code> by <code>"-c:v", "libx264", "-crf", "18", "-preset", "medium", "-c:a", "aac"</code>.</li>
 <li><code>run_ffmpeg</code>:</li>
-<ol>
-<li><code>Popen(cmd, stdout=PIPE, stderr=PIPE, text=True, encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;, creationflags=CREATE_NO_WINDOW)</code>.</li>
+<li><code>Popen(cmd, stdout=PIPE, stderr=PIPE, text=True, encoding="utf-8", errors="replace", creationflags=CREATE_NO_WINDOW)</code>.</li>
 <li>Read stderr in a helper thread into a list (keep last 50 lines).</li>
-<li>Read stdout line by line. ffmpeg <code>-progress</code> emits <code>key=value</code> lines; on <code>out_time_ms=N</code> (microseconds despite the name) compute <code>done = N / 1_000_000</code>; on <code>total_size=N</code> store bytes; on <code>progress=continue</code> or <code>progress=end</code> emit <code>ProgressEvent(kind=&quot;progress&quot;, part=part, done_seconds=done, total_seconds=expected_duration, bytes_written=size, elapsed=time.monotonic()-t0)</code> (FR-6.6). The CLI/GUI derive percent, MB/s and ETA from these fields.</li>
-<li>Between reads check <code>cancel.is_set()</code> (poll every 0.25 s using <code>select</code>-free approach: the stdout reader thread pushes lines into a queue; main loop does <code>queue.get(timeout=0.25)</code>). On cancel: <code>proc.kill()</code>, <code>proc.wait()</code>, return <code>-1</code> (FR-6.7).</li>
+<li>Read stdout line by line. ffmpeg <code>-progress</code> emits <code>key=value</code> lines; on <code>out_time_ms=N</code>
+     (microseconds despite the name) compute <code>done = N / 1_000_000</code>; on <code>total_size=N</code> store bytes;
+     on <code>progress=continue</code> or <code>progress=end</code> emit
+     <code>ProgressEvent(kind="progress", part=part, done_seconds=done, total_seconds=expected_duration, bytes_written=size, elapsed=time.monotonic()-t0)</code> (FR-6.6). The CLI/GUI derive percent, MB/s and ETA from these fields.</li>
+<li>Between reads check <code>cancel.is_set()</code> (poll every 0.25 s using <code>select</code>-free approach: the
+     stdout reader thread pushes lines into a queue; main loop does <code>queue.get(timeout=0.25)</code>).
+     On cancel: <code>proc.kill()</code>, <code>proc.wait()</code>, return <code>-1</code> (FR-6.7).</li>
 <li>On normal end: <code>rc = proc.wait()</code>. Log the full command, <code>rc</code>, and the stderr tail. Return <code>rc</code>.</li>
-</ol>
 </ul>
-<p>Tests: <code>escape_concat_path</code> with <code>it&#x27;s.mp4</code> → <code>file &#x27;/C:/x/it&#x27;\&#x27;&#x27;s.mp4&#x27;</code>; command list matches the normative form exactly (assert equality with a literal list); progress parser turns <code>out_time_ms=90000000</code> into 90.0 s (unit test on a small <code>parse_progress_line</code> helper — add it); cancel kills a running ffmpeg within 2 s (integration).</p>
+<p>Tests: <code>escape_concat_path</code> with <code>it's.mp4</code> → <code>file '/C:/x/it'\''s.mp4'</code>; command list matches the
+normative form exactly (assert equality with a literal list); progress parser turns
+<code>out_time_ms=90000000</code> into 90.0 s (unit test on a small <code>parse_progress_line</code> helper — add it);
+cancel kills a running ffmpeg within 2 s (integration).</p>
 <h3 id="511-coreverifypy-fr-7">5.11 <code>core/verify.py</code> — FR-7</h3>
-<pre><code>TOLERANCE_ABS = 1.0
+<pre><code class="language-python">TOLERANCE_ABS = 1.0
 TOLERANCE_REL = 0.001
 SIZE_MIN_RATIO = 0.90
 
 def ensure_all_probed(ffprobe: Path, part: OutputPart) -&gt; None     # FR-7.2 lazy probe
 def verify_part(ffprobe: Path, part: OutputPart) -&gt; VerifyResult
-def sources_untouched(clips: list[ClipInfo]) -&gt; tuple[bool, list[str]]   # FR-7.6</code></pre>
+def sources_untouched(clips: list[ClipInfo]) -&gt; tuple[bool, list[str]]   # FR-7.6
+</code></pre>
 <ul>
-<li><code>ensure_all_probed</code>: probe any clip in <code>part.clips</code> with <code>probe is None</code>; recompute <code>part.expected_duration</code> as the sum over clips with probe results (unreadable ones contribute 0 and are logged — they were in the concat list, so ffmpeg most likely failed anyway).</li>
+<li><code>ensure_all_probed</code>: probe any clip in <code>part.clips</code> with <code>probe is None</code>; recompute
+  <code>part.expected_duration</code> as the sum over clips with probe results (unreadable ones contribute 0 and
+  are logged — they were in the concat list, so ffmpeg most likely failed anyway).</li>
 <li><code>verify_part</code>:</li>
-<ol>
 <li><code>ensure_all_probed</code>.</li>
-<li><code>try: dur, size = probe_output(ffprobe, part.partial_path) except ProbeError as e: return VerifyResult(False, 0, exp, 0, part.expected_size, f&quot;ffprobe: {e}&quot;)</code> (FR-7.4 moov atom case).</li>
+<li><code>try: dur, size = probe_output(ffprobe, part.partial_path) except ProbeError as e: return VerifyResult(False, 0, exp, 0, part.expected_size, f"ffprobe: {e}")</code> (FR-7.4 moov atom case).</li>
 <li><code>tol = max(TOLERANCE_ABS, TOLERANCE_REL * exp)</code>; <code>dur_ok = abs(dur - exp) &lt;= tol</code> (FR-7.3).</li>
 <li><code>size_ok = size &gt;= SIZE_MIN_RATIO * part.expected_size</code> (FR-7.4). For re-encoded parts skip the size check (<code>size_ok = True</code>) because size legitimately changes.</li>
-<li><code>reason</code> = <code>&quot;&quot;</code> if both ok, else <code>f&quot;duration {dur:.2f}s vs expected {exp:.2f}s&quot;</code> and/or <code>f&quot;size {size} &lt; 90% of {expected}&quot;</code> joined by <code>&quot;; &quot;</code>.</li>
-</ol>
-<li><code>sources_untouched</code>: for each clip <code>os.stat(win_long(path))</code>; compare <code>st_size == clip.size_bytes</code> and <code>abs(st_mtime - clip.mtime) &lt; 1</code>; missing file or mismatch → collect message <code>f&quot;{path}: changed or missing&quot;</code>. Return <code>(len(problems) == 0, problems)</code>.</li>
+<li><code>reason</code> = <code>""</code> if both ok, else <code>f"duration {dur:.2f}s vs expected {exp:.2f}s"</code> and/or <code>f"size {size} &lt; 90% of {expected}"</code> joined by <code>"; "</code>.</li>
+<li><code>sources_untouched</code>: for each clip <code>os.stat(win_long(path))</code>; compare <code>st_size == clip.size_bytes</code>
+  and <code>abs(st_mtime - clip.mtime) &lt; 1</code>; missing file or mismatch → collect message
+  <code>f"{path}: changed or missing"</code>. Return <code>(len(problems) == 0, problems)</code>.</li>
 </ul>
-<p>Tests: tolerance boundaries (exp 100 → tol 1.0; exp 5000 → tol 5.0); size 89 % → FAIL with reason containing "size"; ProbeError → FAIL with reason starting "ffprobe:"; <code>sources_untouched</code> detects size change via a temp file.</p>
+<p>Tests: tolerance boundaries (exp 100 → tol 1.0; exp 5000 → tol 5.0); size 89 % → FAIL with
+reason containing "size"; ProbeError → FAIL with reason starting "ffprobe:"; <code>sources_untouched</code>
+detects size change via a temp file.</p>
 <h3 id="512-corereportpy-fr-9">5.12 <code>core/report.py</code> — FR-9</h3>
-<pre><code>def format_duration(seconds: float) -&gt; str          # &quot;H:MM:SS&quot;
+<pre><code class="language-python">def format_duration(seconds: float) -&gt; str          # &quot;H:MM:SS&quot;
 def format_size(bytes_: int) -&gt; str                 # &quot;7.19 GB&quot;, &quot;512.0 MB&quot;
 def build_report_text(report: RunReport) -&gt; str
 def write_report(guard: WriteGuard, output_dir: Path, text: str) -&gt; Path   # merged\merge_report.txt
-def build_plan_summary(plan: MergePlan) -&gt; str      # FR-2.4 confirmation text</code></pre>
+def build_plan_summary(plan: MergePlan) -&gt; str      # FR-2.4 confirmation text
+</code></pre>
 <p>Normative table layout (<code>build_report_text</code>), columns padded with spaces, header exactly:</p>
 <pre><code>Camera     Part  Output file                                           Files  Duration   Size       Verify
 Front      1     Front_20260831152516_to_20260831171203.mp4            143    2:23:04    7.19 GB    PASS
 Rear       1     Rear_20260831152516_to_20260831171203.mp4             143    2:23:04    3.88 GB    PASS
 Unclassified: 0   Skipped unreadable: 0   Sources untouched: OK
-Output folder: D:\DCIM\Movie\merged</code></pre>
+Output folder: D:\DCIM\Movie\merged
+</code></pre>
 <ul>
-<li>Column widths: Camera 10, Part 5, Output file = longest name (min 40), Files 6, Duration 10, Size 10, Verify 6. Separate columns by two spaces.</li>
-<li>After the table, one line per FAIL/CANCELLED part: <code>f&quot;  {name}: {reason}&quot;</code>.</li>
+<li>Column widths: Camera 10, Part 5, Output file = longest name (min 40), Files 6, Duration 10,
+  Size 10, Verify 6. Separate columns by two spaces.</li>
+<li>After the table, one line per FAIL/CANCELLED part: <code>f"  {name}: {reason}"</code>.</li>
 <li>Then <code>Warnings:</code> followed by each <code>plan.warnings</code> line prefixed by two spaces (omit block if none).</li>
-<li><code>build_plan_summary</code>: one line per group <code>f&quot;{camera}: {n} files, {size}&quot;</code> then <code>f&quot;Unclassified: {n}&quot;</code>, <code>f&quot;Unreadable: {n}&quot;</code>, then <code>Parts to write: {len(parts)}</code> and the warnings.</li>
+<li><code>build_plan_summary</code>: one line per group <code>f"{camera}: {n} files, {size}"</code> then
+  <code>f"Unclassified: {n}"</code>, <code>f"Unreadable: {n}"</code>, then <code>Parts to write: {len(parts)}</code> and the warnings.</li>
 <li><code>format_size</code>: GB if ≥ 1 GiB (2 decimals), else MB (1 decimal), else KB.</li>
 </ul>
-<p>Tests: table header string equality; <code>format_duration(8584)</code> → <code>2:23:04</code>; <code>format_size(7_720_000_000)</code> → <code>7.19 GB</code>.</p>
-<hr>
+<p>Tests: table header string equality; <code>format_duration(8584)</code> → <code>2:23:04</code>;
+<code>format_size(7_720_000_000)</code> → <code>7.19 GB</code>.</p>
+<hr />
 <h2 id="6-corepipelinepy-the-run-orchestrator">6. <code>core/pipeline.py</code> — the run orchestrator</h2>
-<pre><code>class Confirmer(Protocol):
+<pre><code class="language-python">class Confirmer(Protocol):
     def confirm_plan(self, summary: str) -&gt; bool: ...                     # FR-2.4
     def request_camera_map(self, tokens: dict[str, list[ClipInfo]]) -&gt; dict[str, CameraLabel] | None: ...  # FR-2.3
+    def confirm_delete(self, clips: list[ClipInfo]) -&gt; bool: ...          # FR-12.2
 
 def run(cfg: AppConfig, opt: RunOptions, confirmer: Confirmer,
-        progress: ProgressSink, cancel: threading.Event) -&gt; RunReport</code></pre>
+        progress: ProgressSink, cancel: threading.Event) -&gt; RunReport
+</code></pre>
 <p>Exact sequence (each step logs INFO at start):</p>
-<ol start="0">
-<li><strong>Preconditions</strong>: <code>run_id</code>; <code>setup_logging</code>; <code>prune_old_logs</code>; check <code>cfg.ffmpeg_path.is_file()</code> and <code>cfg.ffprobe_path.is_file()</code>, else raise <code>ToolMissingError(f&quot;ffmpeg not found at {path}&quot;)</code> (Spec §7 → exit 2). Check <code>opt.input_dir.is_dir()</code> else <code>UsageError</code>. <code>output_dir = opt.output_dir or input_dir / cfg.output_subfolder</code>. <code>temp_dir = Path(tempfile.gettempdir()) / &quot;DashCamMerger&quot; / run_id</code>. <code>guard = WriteGuard([output_dir, temp_dir])</code>. <strong>Guard rule</strong>: <code>output_dir</code> must not be <code>input_dir</code> itself and must not be a parent of <code>input_dir</code>; raise <code>UsageError(&quot;Output folder must be a subfolder or a separate folder, not the input folder itself&quot;)</code>. (Keeps FR-8.1 true even with <code>--output</code>.)</li>
-<li><strong>Scan</strong> (5.4). If empty → emit <code>ProgressEvent(kind=&quot;error&quot;, message=&quot;No video files found in &lt;dir&gt;&quot;)</code> and raise <code>NoInputError</code> (exit 3, FR-1.5).</li>
+<ol>
+<li><strong>Preconditions</strong>: <code>run_id</code>; <code>setup_logging</code>; <code>prune_old_logs</code>; check <code>cfg.ffmpeg_path.is_file()</code>
+   and <code>cfg.ffprobe_path.is_file()</code>, else raise <code>ToolMissingError(f"ffmpeg not found at {path}")</code>
+   (Spec §7 → exit 2). Check <code>opt.input_dir.is_dir()</code> else <code>UsageError</code>.
+   <code>output_dir = opt.output_dir or input_dir / cfg.output_subfolder</code>. <code>temp_dir = Path(tempfile.gettempdir()) / "DashCamMerger" / run_id</code>.
+   <code>guard = WriteGuard([output_dir, temp_dir])</code>.
+   <strong>Guard rule</strong>: <code>output_dir</code> must not be <code>input_dir</code> itself and must not be a parent of <code>input_dir</code>; raise <code>UsageError("Output folder must be a subfolder or a separate folder, not the input folder itself")</code>. (Keeps FR-8.1 true even with <code>--output</code>.)</li>
+<li><strong>Scan</strong> (5.4). If empty → emit <code>ProgressEvent(kind="error", message="No video files found in &lt;dir&gt;")</code> and raise <code>NoInputError</code> (exit 3, FR-1.5).</li>
 <li><strong>Detect cameras</strong> (5.5). If <code>opt.camera_map</code> given: <code>apply_manual_map(clips, extract_tokens(clips), opt.camera_map)</code>; else <code>detect()</code>; if <code>profile_name is None</code>: <code>mapping = confirmer.request_camera_map(tokens)</code>; if <code>None</code> → <code>CancelledError</code>; else <code>apply_manual_map</code>.</li>
-<li><strong>Plan</strong> (5.8). Emit <code>kind=&quot;plan&quot;</code>.</li>
+<li><strong>Plan</strong> (5.8). Emit <code>kind="plan"</code>.</li>
 <li><strong>Confirm</strong>: <code>if not opt.dry_run and not opt.assume_yes: if not confirmer.confirm_plan(build_plan_summary(plan)): raise CancelledError</code>.</li>
-<li><strong>Dry run</strong>: if <code>opt.dry_run</code>: emit <code>kind=&quot;dry_run&quot;</code> with commands; return a <code>RunReport</code> with empty results (exit 0). Nothing is written, not even the temp dir.</li>
+<li><strong>Dry run</strong>: if <code>opt.dry_run</code>: emit <code>kind="dry_run"</code> with commands; return a <code>RunReport</code> with empty results (exit 0). Nothing is written, not even the temp dir.</li>
 <li><strong>Prepare</strong>: <code>guard.mkdir(output_dir)</code>; <code>guard.mkdir(temp_dir)</code>.</li>
-<li><strong>Execute parts</strong> sequentially (FR-6.5; with <code>parallel &gt; 1</code> use <code>concurrent.futures.ThreadPoolExecutor(max_workers=parallel)</code> running the same <code>execute_part</code> function — the function must be thread-safe: it touches only its own <code>part</code>): <code></code><code> execute_part(part): if cancel.is_set(): return PartResult(part, &quot;SKIPPED&quot;, None, None, 0, None) write_concat_list(guard, part.list_path, part.clips)                # FR-5 cmd = build_command(cfg.ffmpeg_path, part) t0 = monotonic(); rc = run_ffmpeg(cmd, part.expected_duration, cancel, progress, part) if rc == -1:                                                         # FR-6.7 final = rename_incomplete(part)   -&gt; INCOMPLETE_DO_NOT_USE_&lt;name&gt;.mp4 (if partial exists) return PartResult(part, &quot;CANCELLED&quot;, None, final, elapsed, None) if rc != 0: final = rename_incomplete(part) return PartResult(part, &quot;FAIL&quot;, VerifyResult(False, 0, exp, 0, expsize, f&quot;ffmpeg exit {rc}&quot;), final, elapsed, rc) v = verify_part(cfg.ffprobe_path, part)                              # FR-7 if v.passed: if opt.overwrite and part.output_path.exists(): guard.rename(part.output_path, guard.unique_name(part.output_path.with_suffix(&quot;.replaced.mp4&quot;)))  # never delete, FR-8 guard.rename(part.partial_path, part.output_path)                # FR-6.4 return PartResult(part, &quot;PASS&quot;, v, part.output_path, elapsed, rc) final = rename_incomplete(part)                                      # FR-7.5 return PartResult(part, &quot;FAIL&quot;, v, final, elapsed, rc) </code><code></code> <code>rename_incomplete(part)</code>: <code>dst = output_dir / (&quot;INCOMPLETE_DO_NOT_USE_&quot; + part.output_path.name)</code>; <code>dst = guard.unique_name(dst)</code>; <code>guard.rename(part.partial_path, dst)</code>; return <code>dst</code>. If the partial file does not exist, return <code>None</code>. Emit <code>ProgressEvent(kind=&quot;part_done&quot;, result=...)</code> after each part.</li>
-<li><strong>Sources check</strong> (FR-7.6): <code>ok, problems = sources_untouched(all clips)</code>; log each problem at ERROR.</li>
-<li><strong>Report</strong> (FR-9): <code>text = build_report_text(report)</code>; <code>write_report(guard, output_dir, text)</code>; emit <code>kind=&quot;report&quot;</code> with text. Return <code>RunReport</code>.</li>
-<li><strong>Temp cleanup</strong>: none. Temp lists stay in <code>%TEMP%</code> (the OS cleans it; the program never deletes). With <code>--keep-lists</code> they were written to <code>output_dir</code> instead.</li>
+<li><strong>Execute parts</strong> sequentially (FR-6.5; with <code>parallel &gt; 1</code> use <code>concurrent.futures.ThreadPoolExecutor(max_workers=parallel)</code> running the same <code>execute_part</code> function — the function must be thread-safe: it touches only its own <code>part</code>):</li>
 </ol>
-<p>Exceptions defined in <code>pipeline.py</code>: <code>UsageError</code>, <code>ToolMissingError</code>, <code>NoInputError</code>, <code>CancelledError</code> (all subclass <code>PipelineError(Exception)</code>).</p>
-<hr>
+<p><code>execute_part(part):
+       if cancel.is_set(): return PartResult(part, "SKIPPED", None, None, 0, None)
+       write_concat_list(guard, part.list_path, part.clips)                # FR-5
+       cmd = build_command(cfg.ffmpeg_path, part)
+       t0 = monotonic(); rc = run_ffmpeg(cmd, part.expected_duration, cancel, progress, part)
+       if rc == -1:                                                         # FR-6.7
+           final = rename_incomplete(part)   -&gt; INCOMPLETE_DO_NOT_USE_&lt;name&gt;.mp4 (if partial exists)
+           return PartResult(part, "CANCELLED", None, final, elapsed, None)
+       if rc != 0:
+           final = rename_incomplete(part)
+           return PartResult(part, "FAIL", VerifyResult(False, 0, exp, 0, expsize, f"ffmpeg exit {rc}"), final, elapsed, rc)
+       v = verify_part(cfg.ffprobe_path, part)                              # FR-7
+       if v.passed:
+           if opt.overwrite and part.output_path.exists(): guard.rename(part.output_path, guard.unique_name(part.output_path.with_suffix(".replaced.mp4")))  # never delete, FR-8
+           guard.rename(part.partial_path, part.output_path)                # FR-6.4
+           return PartResult(part, "PASS", v, part.output_path, elapsed, rc)
+       final = rename_incomplete(part)                                      # FR-7.5
+       return PartResult(part, "FAIL", v, final, elapsed, rc)</code></p>
+<p><code>rename_incomplete(part)</code>: <code>dst = output_dir / ("INCOMPLETE_DO_NOT_USE_" + part.output_path.name)</code>; <code>dst = guard.unique_name(dst)</code>; <code>guard.rename(part.partial_path, dst)</code>; return <code>dst</code>. If the partial file does not exist, return <code>None</code>.
+   Emit <code>ProgressEvent(kind="part_done", result=...)</code> after each part.
+8. <strong>Sources check</strong> (FR-7.6): <code>ok, problems = sources_untouched(all clips)</code>; log each problem at ERROR.
+9. <strong>Report</strong> (FR-9): <code>text = build_report_text(report)</code>; <code>write_report(guard, output_dir, text)</code>; emit <code>kind="report"</code> with text. Return <code>RunReport</code>.
+10. <strong>Temp cleanup</strong>: none. Temp lists stay in <code>%TEMP%</code> (the OS cleans it; the program never deletes). With <code>--keep-lists</code> they were written to <code>output_dir</code> instead.
+11. <strong>Optional source deletion</strong> (FR-12), only if <code>opt.delete_source</code> and there were results:
+    <code>deletable = cleanup.sources_for_deletion(results)</code>; if empty, log and skip. Otherwise
+    <code>if confirmer.confirm_delete(deletable):</code> call <code>cleanup.delete_sources(deletable, [output_dir, temp_dir])</code>,
+    store <code>(deleted, errors)</code> on the already-built <code>report</code>, log each outcome, emit a summary
+    <code>kind="log"</code> event, and rewrite <code>merge_report.txt</code> (step 9's <code>build_report_text</code> now
+    includes the deletion section) so the file on disk matches what was actually deleted.
+    If not confirmed, emit a "kept" log event and leave every source file alone.</p>
+<p>Exceptions defined in <code>pipeline.py</code>: <code>UsageError</code>, <code>ToolMissingError</code>, <code>NoInputError</code>, <code>CancelledError</code>
+(all subclass <code>PipelineError(Exception)</code>).</p>
+<hr />
 <h2 id="7-coreprogresspy-event-channel">7. <code>core/progress.py</code> — event channel</h2>
-<pre><code>@dataclass(slots=True)
+<pre><code class="language-python">@dataclass(slots=True)
 class ProgressEvent:
     kind: Literal[&quot;log&quot;, &quot;probe&quot;, &quot;plan&quot;, &quot;dry_run&quot;, &quot;part_start&quot;, &quot;progress&quot;, &quot;part_done&quot;, &quot;report&quot;, &quot;error&quot;]
     message: str = &quot;&quot;
@@ -610,15 +831,15 @@ class QueueSink:                    # used by GUI
     def emit(self, ev) -&gt; None: q.put(ev)
 
 class CallbackSink:                 # used by CLI
-    def __init__(self, fn: Callable[[ProgressEvent], None]) -&gt; None</code></pre>
-<p>Derived display values (implemented once in <code>progress.py</code> as <code>def describe(ev) -&gt; str</code>, used by both CLI and GUI):</p>
-<ul>
-<li><code>percent = min(100, 100 * done_seconds / total_seconds)</code> (0 if total unknown)</li>
-<li><code>mb_per_s = bytes_written / 1_048_576 / elapsed</code> (0 if elapsed &lt; 0.5)</li>
-<li><code>eta_s = (total_seconds - done_seconds) * elapsed / done_seconds</code> (blank if done &lt; 1 s)</li>
-<li>Text: <code>f&quot;{part.camera} part {i}/{n}: {percent:5.1f}%  {mb_per_s:6.1f} MB/s  elapsed {H:MM:SS}  ETA {H:MM:SS}&quot;</code></li>
-</ul>
-<hr>
+    def __init__(self, fn: Callable[[ProgressEvent], None]) -&gt; None
+</code></pre>
+<p>Derived display values (implemented once in <code>progress.py</code> as <code>def describe(ev) -&gt; str</code>, used by both
+CLI and GUI):
+- <code>percent = min(100, 100 * done_seconds / total_seconds)</code> (0 if total unknown)
+- <code>mb_per_s = bytes_written / 1_048_576 / elapsed</code> (0 if elapsed &lt; 0.5)
+- <code>eta_s = (total_seconds - done_seconds) * elapsed / done_seconds</code> (blank if done &lt; 1 s)
+- Text: <code>f"{part.camera} part {i}/{n}: {percent:5.1f}%  {mb_per_s:6.1f} MB/s  elapsed {H:MM:SS}  ETA {H:MM:SS}"</code></p>
+<hr />
 <h2 id="8-clipy-fr-11">8. <code>cli.py</code> — FR-11</h2>
 <h3 id="81-arguments-argparse-exact-flag-names">8.1 Arguments (argparse, exact flag names)</h3>
 <pre><code>--input PATH          required
@@ -633,134 +854,334 @@ class CallbackSink:                 # used by CLI
 --keep-lists          store_true
 --parallel INT
 --dry-run             store_true
+--delete-source       store_true  -&gt; RunOptions.delete_source (FR-12, default False)
 --verbose             store_true
 --version             action=&quot;version&quot;, &quot;DashCamMerger %(version)s&quot;
---config PATH         optional path to config.json (not in spec; harmless addition, document in README)</code></pre>
+--config PATH         optional path to config.json (not in spec; harmless addition, document in README)
+</code></pre>
 <h3 id="82-behaviour">8.2 Behaviour</h3>
 <ul>
-<li><code>CliConfirmer.confirm_plan(summary)</code>: print summary, then <code>input(&quot;Proceed with merge? [y/N] &quot;)</code>; return <code>answer.strip().lower() in (&quot;y&quot;, &quot;yes&quot;)</code>. When stdin is not a TTY and <code>--yes</code> is absent, print <code>&quot;Not a terminal; use --yes to skip confirmation&quot;</code> and return False.</li>
-<li><code>CliConfirmer.request_camera_map(tokens)</code>: print each token with up to 5 sample names, then for each token <code>input(f&quot;Camera for &#x27;{token}&#x27; [Front/Rear/Interior/Skip]: &quot;)</code>; empty answer = Skip. Non-TTY → print hint to use <code>--camera-map</code> and return None.</li>
+<li><code>CliConfirmer.confirm_plan(summary)</code>: print summary, then <code>input("Proceed with merge? [y/N] ")</code>; return <code>answer.strip().lower() in ("y", "yes")</code>. When stdin is not a TTY and <code>--yes</code> is absent, print <code>"Not a terminal; use --yes to skip confirmation"</code> and return False.</li>
+<li><code>CliConfirmer.request_camera_map(tokens)</code>: print each token with up to 5 sample names, then for each token <code>input(f"Camera for '{token}' [Front/Rear/Interior/Skip]: ")</code>; empty answer = Skip. Non-TTY → print hint to use <code>--camera-map</code> and return None.</li>
+<li><code>CliConfirmer.confirm_delete(clips)</code> (FR-12.2): if <code>--yes</code> was given, return <code>True</code> immediately —
+  no separate prompt. Otherwise <code>input(f"Permanently delete {n} source clip file(s)? ... Type 'yes' to continue: ")</code>;
+  only the literal <code>"yes"</code> (case-insensitive) confirms. Non-TTY without <code>--yes</code> → print a hint and return <code>False</code>
+  (files are kept).</li>
 <li>Progress: <code>CallbackSink</code> printing <code>describe(ev)</code> on one line with <code>\r</code> for <code>progress</code> events, and full lines for other kinds. Print the report text at the end.</li>
 <li><code>Ctrl+C</code>: catch <code>KeyboardInterrupt</code> in <code>cli.main</code>, set <code>cancel</code>, wait for the pipeline to return, exit 130.</li>
 </ul>
 <h3 id="83-exit-codes-normative">8.3 Exit codes (normative)</h3>
-<table><thead><tr><th>Code</th><th>When</th></tr></thead><tbody>
-<tr><td>0</td><td>every part PASS (or dry-run completed)</td></tr>
-<tr><td>1</td><td>at least one part FAIL</td></tr>
-<tr><td>2</td><td><code>UsageError</code>, <code>ConfigError</code>, <code>ToolMissingError</code>, argparse error</td></tr>
-<tr><td>3</td><td><code>NoInputError</code></td></tr>
-<tr><td>130</td><td><code>CancelledError</code> or KeyboardInterrupt (any part CANCELLED)</td></tr>
-</tbody></table>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>every part PASS (or dry-run completed)</td>
+</tr>
+<tr>
+<td>1</td>
+<td>at least one part FAIL</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>UsageError</code>, <code>ConfigError</code>, <code>ToolMissingError</code>, argparse error</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>NoInputError</code></td>
+</tr>
+<tr>
+<td>130</td>
+<td><code>CancelledError</code> or KeyboardInterrupt (any part CANCELLED)</td>
+</tr>
+</tbody>
+</table>
 <p><code>RunReport.exit_code</code>: 130 if any CANCELLED, else 1 if any FAIL, else 0.</p>
-<hr>
+<hr />
 <h2 id="9-guipy-spec-6">9. <code>gui.py</code> — Spec §6</h2>
 <h3 id="91-layout-tkinter-ttk-widgets-grid-geometry">9.1 Layout (Tkinter, <code>ttk</code> widgets, grid geometry)</h3>
 <pre><code>Row 0: [Label &quot;Input folder&quot;]  [Entry input_var (width 70)] [Button &quot;Browse…&quot;]
 Row 1: [Label &quot;Output folder&quot;] [Entry output_var]           [Button &quot;Browse…&quot;]
 Row 2: [Button &quot;Scan&quot;]  [Checkbutton &quot;Split on trip gaps&quot;] [Checkbutton &quot;Re-encode if formats differ (slow)&quot;]
-       [Checkbutton &quot;Overwrite existing outputs&quot;] [Label &quot;Max part size (GB, 0 = unlimited)&quot;] [Spinbox 0..64 step 1]
+       [Checkbutton &quot;Overwrite existing outputs&quot;] [Checkbutton &quot;Delete original clips after successful merge
+       (cannot be undone)&quot; - FR-12, default unchecked] [Label &quot;Max part size (GB, 0 = unlimited)&quot;] [Spinbox 0..64 step 1]
 Row 3: Treeview columns: Camera | Files | Total size | First clip | Last clip | Codec | Order source   (height 6)
 Row 4: [Button &quot;Merge&quot; (disabled until scan OK)] [Button &quot;Cancel&quot; (disabled until merging)] [Button &quot;Open output folder&quot; (disabled until done)]
 Row 5: Frame &quot;progress_frame&quot;: one row per part -&gt; Label(name) + ttk.Progressbar(length 400) + Label(status text)
 Row 6: ScrolledText log pane (height 10, state disabled, appended programmatically)
-Menu:  File -&gt; Open config.json | Open logs folder | Exit ;  Help -&gt; About</code></pre>
-<p>Window title <code>&quot;DashCam Merger 1.0.0&quot;</code>, <code>geometry(&quot;760x560&quot;)</code>, <code>minsize(640, 480)</code>.</p>
+Menu:  File -&gt; Open config.json | Open logs folder | Exit ;  Help -&gt; About
+</code></pre>
+<p>Window title <code>"DashCam Merger 1.0.0"</code>, <code>geometry("760x560")</code>, <code>minsize(640, 480)</code>.</p>
 <h3 id="92-behaviour">9.2 Behaviour</h3>
 <ul>
 <li><strong>Browse…</strong>: <code>filedialog.askdirectory()</code>. Setting input auto-fills output with <code>&lt;input&gt;\merged</code> if output is empty or was auto-filled.</li>
-<li><strong>Scan</strong>: runs <code>pipeline.run</code> with <code>dry_run=True</code> in a worker thread (so probing does not freeze the UI). The <code>GuiConfirmer.request_camera_map</code> shows the modal dialog (Section 9.3) — it must be invoked on the Tk main thread: the worker puts a request on the queue and waits on a <code>threading.Event</code> for the answer. On <code>kind=&quot;plan&quot;</code> fill the Treeview: per group: camera, file count, <code>format_size(sum)</code>, first/last clip names, codec = <code>f&quot;{sig.v_codec} {w}x{h}&quot;</code> from the first probed clip (or "mixed"), order source. Enable <strong>Merge</strong>. Store the chosen camera mapping so the real merge does not ask again.</li>
+<li><strong>Scan</strong>: runs <code>pipeline.run</code> with <code>dry_run=True</code> in a worker thread (so probing does not freeze the UI). The <code>GuiConfirmer.request_camera_map</code> shows the modal dialog (Section 9.3) — it must be invoked on the Tk main thread: the worker puts a request on the queue and waits on a <code>threading.Event</code> for the answer. On <code>kind="plan"</code> fill the Treeview: per group: camera, file count, <code>format_size(sum)</code>, first/last clip names, codec = <code>f"{sig.v_codec} {w}x{h}"</code> from the first probed clip (or "mixed"), order source. Enable <strong>Merge</strong>. Store the chosen camera mapping so the real merge does not ask again.</li>
 <li><strong>Merge</strong>: new worker thread running <code>pipeline.run</code> with <code>dry_run=False</code>, <code>assume_yes=True</code> (the Scan table plus the Merge click <em>is</em> the confirmation required by FR-2.4), and the stored <code>camera_map</code>. Disable Scan/Merge, enable Cancel.</li>
 <li><strong>Queue polling</strong>: <code>root.after(100, poll)</code> drains the <code>queue.Queue</code>; <code>progress</code> → update the part's Progressbar (<code>value=percent</code>) and status label with <code>describe(ev)</code>; <code>log</code> → append to log pane; <code>part_done</code> → set label <code>PASS</code>/<code>FAIL</code>/<code>CANCELLED</code>; <code>report</code> → show report in a read-only Toplevel or in the log pane and enable <strong>Open output folder</strong> (<code>os.startfile(output_dir)</code>); <code>error</code> → <code>messagebox.showerror</code>.</li>
+<li><strong>Delete original clips after successful merge</strong> checkbox (FR-12) → <code>RunOptions.delete_source</code>,
+  forced <code>False</code> whenever <code>dry_run=True</code> (a Scan never deletes anything). When set,
+  <code>GuiConfirmer.confirm_delete(clips)</code> shows a <code>messagebox.askyesno</code> warning dialog naming the
+  exact file count, on the Tk main thread (same request/<code>threading.Event</code> bridge as
+  <code>request_camera_map</code>) — this fires every time, independent of the <code>assume_yes=True</code> used for
+  the merge-plan confirmation.</li>
 <li><strong>Cancel</strong>: <code>cancel.set()</code>; button text becomes "Cancelling…" until the worker finishes.</li>
 <li><strong>Window close during merge</strong> (<code>WM_DELETE_WINDOW</code>): same as Cancel, then wait for the worker (join with timeout 10 s), then destroy (Spec §7).</li>
 <li><strong>About</strong>: run <code>ffmpeg -version</code> (first line) and show it with <code>__version__</code>.</li>
 </ul>
 <h3 id="93-camera-mapping-dialog-fr-23">9.3 Camera mapping dialog (FR-2.3)</h3>
-<p>Modal <code>Toplevel</code>, title "Assign cameras". One row per token: <code>Label(token)</code>, <code>Label(&quot;\n&quot;.join(first 5 names))</code>, <code>ttk.Combobox(values=[&quot;Front&quot;, &quot;Rear&quot;, &quot;Interior&quot;, &quot;Skip&quot;], state=&quot;readonly&quot;)</code> default <code>&quot;Skip&quot;</code>. Buttons <strong>OK</strong> / <strong>Cancel</strong>. OK returns <code>{token: value}</code>; Cancel returns <code>None</code> (pipeline raises <code>CancelledError</code>, GUI shows "Scan cancelled").</p>
-<hr>
+<p>Modal <code>Toplevel</code>, title "Assign cameras". One row per token: <code>Label(token)</code>, <code>Label("\n".join(first 5 names))</code>,
+<code>ttk.Combobox(values=["Front", "Rear", "Interior", "Skip"], state="readonly")</code> default <code>"Skip"</code>.
+Buttons <strong>OK</strong> / <strong>Cancel</strong>. OK returns <code>{token: value}</code>; Cancel returns <code>None</code> (pipeline raises <code>CancelledError</code>, GUI shows "Scan cancelled").</p>
+<hr />
 <h2 id="10-mainpy">10. <code>main.py</code></h2>
-<pre><code>def main(argv: list[str] | None = None) -&gt; int:
+<pre><code class="language-python">def main(argv: list[str] | None = None) -&gt; int:
     argv = sys.argv[1:] if argv is None else argv
     if argv:                      # any argument -&gt; CLI
         return cli.main(argv)
     return gui.main()             # no arguments -&gt; GUI, returns 0
 if __name__ == &quot;__main__&quot;:
-    sys.exit(main())</code></pre>
-<p>Build note: the exe is built <code>--windowed</code>; on Windows a windowed exe has no console, so for CLI use the README tells users to run <code>DashCamMerger.exe --input ... | more</code> from a terminal <strong>or</strong> build a second console exe <code>DashCamMerger-cli.exe</code> (same code, <code>--console</code>). Section 15 builds both.</p>
-<hr>
+    sys.exit(main())
+</code></pre>
+<p>Build note: the exe is built <code>--windowed</code>; on Windows a windowed exe has no console, so for CLI use
+the README tells users to run <code>DashCamMerger.exe --input ... | more</code> from a terminal <strong>or</strong> build a second
+console exe <code>DashCamMerger-cli.exe</code> (same code, <code>--console</code>). Section 15 builds both.</p>
+<hr />
 <h2 id="11-external-commands-normative-reference">11. External commands (normative reference)</h2>
-<table><thead><tr><th>Purpose</th><th>Command</th></tr></thead><tbody>
-<tr><td>Probe clip / output</td><td><code>ffprobe -v error -print_format json -show_format -show_streams &lt;file&gt;</code></td></tr>
-<tr><td>Merge (copy)</td><td><code>ffmpeg -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i &lt;list&gt; -c copy -movflags +faststart &lt;out.partial.mp4&gt;</code></td></tr>
-<tr><td>Merge (re-encode)</td><td>same, with <code>-c:v libx264 -crf 18 -preset medium -c:a aac</code> instead of <code>-c copy</code></td></tr>
-<tr><td>Version (About)</td><td><code>ffmpeg -version</code></td></tr>
-</tbody></table>
+<table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Probe clip / output</td>
+<td><code>ffprobe -v error -print_format json -show_format -show_streams &lt;file&gt;</code></td>
+</tr>
+<tr>
+<td>Merge (copy)</td>
+<td><code>ffmpeg -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i &lt;list&gt; -c copy -movflags +faststart &lt;out.partial.mp4&gt;</code></td>
+</tr>
+<tr>
+<td>Merge (re-encode)</td>
+<td>same, with <code>-c:v libx264 -crf 18 -preset medium -c:a aac</code> instead of <code>-c copy</code></td>
+</tr>
+<tr>
+<td>Version (About)</td>
+<td><code>ffmpeg -version</code></td>
+</tr>
+</tbody>
+</table>
 <p>ffprobe JSON fields used: <code>format.duration</code>, <code>format.size</code>, <code>streams[].codec_type</code>, <code>codec_name</code>, <code>width</code>, <code>height</code>, <code>r_frame_rate</code>, <code>pix_fmt</code>, <code>sample_rate</code>, <code>channels</code>.</p>
 <p>ffmpeg <code>-progress</code> keys used: <code>out_time_ms</code> (microseconds), <code>total_size</code>, <code>progress</code> (<code>continue</code>/<code>end</code>).</p>
-<hr>
+<hr />
 <h2 id="12-safety-rules-enforcement">12. Safety rules → enforcement</h2>
-<table><thead><tr><th>Rule</th><th>Enforcement</th></tr></thead><tbody>
-<tr><td>FR-8.1 never write in input folder</td><td><code>WriteGuard</code> allowed roots = <code>[output_dir, temp_dir]</code>; output cannot equal or contain input (Section 6 step 0). <code>grep</code> the code base for <code>unlink</code>, <code>rmtree</code>, <code>remove(</code> — only <code>logging_setup.prune_old_logs</code> may contain a delete, and only on <code>logs\merge_*.log</code>.</td></tr>
-<tr><td>FR-8.2 only rename own files</td><td><code>rename</code> is called only on <code>partial_path</code> and on a previous output when <code>--overwrite</code>; both are under <code>output_dir</code>.</td></tr>
-<tr><td>FR-8.3 overwrite never touches sources</td><td><code>--overwrite</code> renames the old output to <code>*.replaced.mp4</code> and never deletes.</td></tr>
-<tr><td>FR-6.4 finished <code>.mp4</code> is always good</td><td>Only <code>verify_part</code> PASS leads to the rename from <code>.partial.mp4</code>.</td></tr>
-<tr><td>FR-7.6</td><td><code>sources_untouched</code> runs at the end of every non-dry run and is printed in the report.</td></tr>
-</tbody></table>
-<p>Unit test <code>test_safety_grep</code> (in <code>test_integration.py</code>): scan all <code>src\**\*.py</code> for the strings <code>unlink(</code>, <code>rmtree(</code>, <code>os.remove(</code>, <code>send2trash</code>; assert the only hit is in <code>logging_setup.py</code>.</p>
-<hr>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Enforcement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-8.1 never write in input folder</td>
+<td><code>WriteGuard</code> allowed roots = <code>[output_dir, temp_dir]</code>; output cannot equal or contain input (Section 6 step 0). <code>grep</code> the code base for <code>unlink</code>, <code>rmtree</code>, <code>remove(</code> — only <code>logging_setup.prune_old_logs</code> and (opt-in, FR-12) <code>cleanup.py</code> may contain a delete.</td>
+</tr>
+<tr>
+<td>FR-8.2 only rename own files</td>
+<td><code>rename</code> is called only on <code>partial_path</code> and on a previous output when <code>--overwrite</code>; both are under <code>output_dir</code>.</td>
+</tr>
+<tr>
+<td>FR-8.3 overwrite never touches sources</td>
+<td><code>--overwrite</code> renames the old output to <code>*.replaced.mp4</code> and never deletes.</td>
+</tr>
+<tr>
+<td>FR-6.4 finished <code>.mp4</code> is always good</td>
+<td>Only <code>verify_part</code> PASS leads to the rename from <code>.partial.mp4</code>.</td>
+</tr>
+<tr>
+<td>FR-7.6</td>
+<td><code>sources_untouched</code> runs at the end of every non-dry run and is printed in the report.</td>
+</tr>
+<tr>
+<td>FR-12 source deletion stays opt-in and verification-gated</td>
+<td><code>RunOptions.delete_source</code> defaults <code>False</code>; <code>cleanup.sources_for_deletion</code> only returns clips of a <code>PASS</code> result; <code>Confirmer.confirm_delete</code> is required before any <code>os.remove</code>; <code>delete_sources</code> itself refuses paths under <code>[output_dir, temp_dir]</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Unit test <code>test_safety_grep</code> (in <code>test_integration.py</code>): scan all <code>src\**\*.py</code> for the strings
+<code>unlink(</code>, <code>rmtree(</code>, <code>os.remove(</code>, <code>send2trash</code>; assert every hit is in <code>logging_setup.py</code> or
+<code>cleanup.py</code>.</p>
+<hr />
 <h2 id="13-test-plan">13. Test plan</h2>
 <h3 id="131-unit-tests-no-ffmpeg-needed">13.1 Unit tests (no ffmpeg needed)</h3>
-<p>Listed per module in Section 5. Use <code>tmp_path</code> fixtures; create fake clips with <code>Path.write_bytes(b&quot;\0&quot; * n)</code>. Fake probe results are injected by setting <code>clip.probe = ProbeResult(60.0, size, StreamSignature(...))</code>. Run: <code>pytest -m &quot;not integration&quot;</code>.</p>
+<p>Listed per module in Section 5. Use <code>tmp_path</code> fixtures; create fake clips with <code>Path.write_bytes(b"\0" * n)</code>.
+Fake probe results are injected by setting <code>clip.probe = ProbeResult(60.0, size, StreamSignature(...))</code>.
+Run: <code>pytest -m "not integration"</code>.</p>
 <h3 id="132-fixture-generator-testsfixturesmake_clipspy">13.2 Fixture generator <code>tests\fixtures\make_clips.py</code></h3>
-<pre><code>def make_clips(dst: Path, ffmpeg: Path, camera_suffixes=(&quot;F&quot;, &quot;R&quot;), count=6, seconds=2,
+<pre><code class="language-python">def make_clips(dst: Path, ffmpeg: Path, camera_suffixes=(&quot;F&quot;, &quot;R&quot;), count=6, seconds=2,
                size=&quot;640x360&quot;, start=&quot;20260831152516&quot;, different_res_index: int | None = None,
-               truncate_index: int | None = None) -&gt; list[Path]</code></pre>
+               truncate_index: int | None = None) -&gt; list[Path]
+</code></pre>
 <ul>
-<li>Produces <code>f&quot;{ts}_{seq:07d}{suffix}.MP4&quot;</code> (Xforce style), timestamps 60 s apart, with <code>ffmpeg -y -f lavfi -i testsrc=size=&lt;size&gt;:rate=30 -f lavfi -i sine=frequency=440 -t &lt;seconds&gt; -c:v libx264 -pix_fmt yuv420p -c:a aac &lt;file&gt;</code>.</li>
-<li><code>different_res_index</code>: that clip gets <code>size=&quot;320x180&quot;</code>.</li>
+<li>Produces <code>f"{ts}_{seq:07d}{suffix}.MP4"</code> (Xforce style), timestamps 60 s apart, with
+  <code>ffmpeg -y -f lavfi -i testsrc=size=&lt;size&gt;:rate=30 -f lavfi -i sine=frequency=440 -t &lt;seconds&gt; -c:v libx264 -pix_fmt yuv420p -c:a aac &lt;file&gt;</code>.</li>
+<li><code>different_res_index</code>: that clip gets <code>size="320x180"</code>.</li>
 <li><code>truncate_index</code>: that clip is cut to its first 2 000 bytes after creation (unreadable).</li>
 </ul>
 <h3 id="133-integration-tests-pytestmarkintegration-require-ffmpeg-present">13.3 Integration tests (<code>@pytest.mark.integration</code>, require <code>ffmpeg\</code> present)</h3>
-<table><thead><tr><th>ID</th><th>Scenario</th><th>Expected</th></tr></thead><tbody>
-<tr><td>IT-1</td><td>6 F + 6 R clips, 2 s each, CLI <code>--yes</code></td><td>2 outputs, duration 12 ± 1 s, both PASS, exit 0, <code>merge_report.txt</code> exists, all 12 sources same SHA-256 as before</td></tr>
-<tr><td>IT-2</td><td>clip 3 of Front has different resolution</td><td>Front → 2 parts (<code>_part1</code>, <code>_part2</code>), warning contains <code>codec change</code>, exit 0</td></tr>
-<tr><td>IT-3</td><td>clip 2 of Rear truncated</td><td>Rear merged from 5 clips, report shows <code>Skipped unreadable: 1</code>, exit 0</td></tr>
-<tr><td>IT-4</td><td><code>--dry-run</code></td><td>no <code>merged\</code> folder created, commands printed, exit 0</td></tr>
-<tr><td>IT-5</td><td>run twice without <code>--overwrite</code></td><td>second run produces <code>_2</code> files, first files unchanged</td></tr>
-<tr><td>IT-6</td><td>cancel after 0.5 s (set <code>cancel</code> event programmatically with 60 clips of 2 s)</td><td>file <code>INCOMPLETE_DO_NOT_USE_*.mp4</code> present, no <code>.partial.mp4</code>, exit 130, sources untouched</td></tr>
-<tr><td>IT-7</td><td><code>--camera-map</code> with unknown token names</td><td>Unclassified count &gt; 0, still exit 0 for other groups</td></tr>
-<tr><td>IT-8</td><td><code>--max-part-gb 0.001</code> (≈1 MB) with 6 clips</td><td>multiple parts, every part PASS</td></tr>
-<tr><td>IT-9</td><td>filename with <code>&#x27;</code> and Vietnamese characters (<code>xe ô tô &#x27;test&#x27;_F.MP4</code>)</td><td>PASS</td></tr>
-<tr><td>IT-10</td><td><code>--output</code> equal to <code>--input</code></td><td>exit 2, message about output folder</td></tr>
-</tbody></table>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Scenario</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IT-1</td>
+<td>6 F + 6 R clips, 2 s each, CLI <code>--yes</code></td>
+<td>2 outputs, duration 12 ± 1 s, both PASS, exit 0, <code>merge_report.txt</code> exists, all 12 sources same SHA-256 as before</td>
+</tr>
+<tr>
+<td>IT-2</td>
+<td>clip 3 of Front has different resolution</td>
+<td>Front → 2 parts (<code>_part1</code>, <code>_part2</code>), warning contains <code>codec change</code>, exit 0</td>
+</tr>
+<tr>
+<td>IT-3</td>
+<td>clip 2 of Rear truncated</td>
+<td>Rear merged from 5 clips, report shows <code>Skipped unreadable: 1</code>, exit 0</td>
+</tr>
+<tr>
+<td>IT-4</td>
+<td><code>--dry-run</code></td>
+<td>no <code>merged\</code> folder created, commands printed, exit 0</td>
+</tr>
+<tr>
+<td>IT-5</td>
+<td>run twice without <code>--overwrite</code></td>
+<td>second run produces <code>_2</code> files, first files unchanged</td>
+</tr>
+<tr>
+<td>IT-6</td>
+<td>cancel after 0.5 s (set <code>cancel</code> event programmatically with 60 clips of 2 s)</td>
+<td>file <code>INCOMPLETE_DO_NOT_USE_*.mp4</code> present, no <code>.partial.mp4</code>, exit 130, sources untouched</td>
+</tr>
+<tr>
+<td>IT-7</td>
+<td><code>--camera-map</code> with unknown token names</td>
+<td>Unclassified count &gt; 0, still exit 0 for other groups</td>
+</tr>
+<tr>
+<td>IT-8</td>
+<td><code>--max-part-gb 0.001</code> (≈1 MB) with 6 clips</td>
+<td>multiple parts, every part PASS</td>
+</tr>
+<tr>
+<td>IT-9</td>
+<td>filename with <code>'</code> and Vietnamese characters (<code>xe ô tô 'test'_F.MP4</code>)</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>IT-10</td>
+<td><code>--output</code> equal to <code>--input</code></td>
+<td>exit 2, message about output folder</td>
+</tr>
+</tbody>
+</table>
 <h3 id="134-acceptance-manual-spec-10">13.4 Acceptance (manual, Spec §10)</h3>
-<p>Run the GUI on a real Xforce folder; confirm two files in <code>merged\</code>, playable and seekable in VLC and Windows Media Player; input folder unchanged apart from <code>merged\</code>; no internet; no admin.</p>
-<hr>
+<p>Run the GUI on a real Xforce folder; confirm two files in <code>merged\</code>, playable and seekable in VLC and
+Windows Media Player; input folder unchanged apart from <code>merged\</code>; no internet; no admin.</p>
+<hr />
 <h2 id="14-implementation-plan-do-these-in-order">14. Implementation plan (do these in order)</h2>
-<table><thead><tr><th>Step</th><th>Deliverable</th><th>Done when</th></tr></thead><tbody>
-<tr><td>0</td><td>Layout from Section 3, <code>__version__</code>, empty modules, <code>conftest.py</code> that adds <code>src</code> to <code>sys.path</code>, <code>pytest</code> runs 0 tests green</td><td><code>pytest</code> exits 0</td></tr>
-<tr><td>1</td><td><code>models.py</code>, <code>config.py</code>, <code>logging_setup.py</code></td><td><code>test_config.py</code> green</td></tr>
-<tr><td>2</td><td><code>safe_io.py</code>, <code>winpath.py</code></td><td>safe_io tests green</td></tr>
-<tr><td>3</td><td><code>scanner.py</code></td><td><code>test_scanner.py</code> green</td></tr>
-<tr><td>4</td><td><code>ordering.py</code></td><td><code>test_ordering.py</code> green</td></tr>
-<tr><td>5</td><td><code>cameras.py</code></td><td><code>test_cameras.py</code> green</td></tr>
-<tr><td>6</td><td><code>probe.py</code> (+ JSON fixtures in <code>tests\fixtures\</code>)</td><td><code>test_probe.py</code> green</td></tr>
-<tr><td>7</td><td><code>progress.py</code>, <code>planner.py</code></td><td><code>test_planner.py</code> green</td></tr>
-<tr><td>8</td><td><code>concat.py</code>, <code>verify.py</code>, <code>report.py</code></td><td>their tests green</td></tr>
-<tr><td>9</td><td><code>pipeline.py</code>, <code>cli.py</code>, <code>main.py</code></td><td><code>test_cli.py</code> green; <code>make_clips.py</code> works; IT-1 … IT-10 green</td></tr>
-<tr><td>10</td><td><code>gui.py</code></td><td>manual checklist in Section 9 completed; Scan → Merge → PASS on fixture folder</td></tr>
-<tr><td>11</td><td><code>build.bat</code>, README.txt, CHANGELOG.md</td><td><code>dist\DashCamMerger\DashCamMerger.exe</code> runs on a clean Windows 10 VM without Python</td></tr>
-</tbody></table>
-<p>Rules for the implementer:</p>
-<ul>
-<li>Write the test file for a step <strong>before</strong> the module, from the "Tests" lines in Section 5.</li>
-<li>Do not modify a finished module to make a later step easier; extend it with a new function instead and note <code># DESIGN-GAP</code>.</li>
-<li>Keep every function under ~60 lines; split otherwise.</li>
-<li>No global mutable state except <code>BUILTIN_PROFILES</code>, <code>DEFAULTS</code> and regex constants.</li>
-</ul>
-<hr>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Deliverable</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Layout from Section 3, <code>__version__</code>, empty modules, <code>conftest.py</code> that adds <code>src</code> to <code>sys.path</code>, <code>pytest</code> runs 0 tests green</td>
+<td><code>pytest</code> exits 0</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>models.py</code>, <code>config.py</code>, <code>logging_setup.py</code></td>
+<td><code>test_config.py</code> green</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>safe_io.py</code>, <code>winpath.py</code></td>
+<td>safe_io tests green</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>scanner.py</code></td>
+<td><code>test_scanner.py</code> green</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>ordering.py</code></td>
+<td><code>test_ordering.py</code> green</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>cameras.py</code></td>
+<td><code>test_cameras.py</code> green</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>probe.py</code> (+ JSON fixtures in <code>tests\fixtures\</code>)</td>
+<td><code>test_probe.py</code> green</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>progress.py</code>, <code>planner.py</code></td>
+<td><code>test_planner.py</code> green</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>concat.py</code>, <code>verify.py</code>, <code>report.py</code></td>
+<td>their tests green</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>pipeline.py</code>, <code>cli.py</code>, <code>main.py</code></td>
+<td><code>test_cli.py</code> green; <code>make_clips.py</code> works; IT-1 … IT-10 green</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>gui.py</code></td>
+<td>manual checklist in Section 9 completed; Scan → Merge → PASS on fixture folder</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>build.bat</code>, README.txt, CHANGELOG.md</td>
+<td><code>dist\DashCamMerger\DashCamMerger.exe</code> runs on a clean Windows 10 VM without Python</td>
+</tr>
+</tbody>
+</table>
+<p>Rules for the implementer:
+- Write the test file for a step <strong>before</strong> the module, from the "Tests" lines in Section 5.
+- Do not modify a finished module to make a later step easier; extend it with a new function instead and note <code># DESIGN-GAP</code>.
+- Keep every function under ~60 lines; split otherwise.
+- No global mutable state except <code>BUILTIN_PROFILES</code>, <code>DEFAULTS</code> and regex constants.</p>
+<hr />
 <h2 id="15-build-buildbat">15. Build (<code>build.bat</code>)</h2>
-<pre><code>@echo off
+<pre><code class="language-bat">@echo off
 setlocal
 if not exist .venv python -m venv .venv
 call .venv\Scripts\activate
@@ -776,59 +1197,221 @@ copy /y README.txt dist\DashCamMerger\
 if not exist dist\DashCamMerger\logs mkdir dist\DashCamMerger\logs
 powershell -Command &quot;Compress-Archive -Force dist\DashCamMerger\* DashCamMerger_v1.0_win64.zip&quot;
 powershell -Command &quot;(Get-FileHash DashCamMerger_v1.0_win64.zip -Algorithm SHA256).Hash&quot; &gt; DashCamMerger_v1.0_win64.sha256
-endlocal</code></pre>
-<p><code>app_dir()</code> in the frozen build is <code>dist\DashCamMerger\</code>, so <code>ffmpeg\</code> and <code>config.json</code> sit beside the exe exactly as Spec §4 shows. Both exes share the folder; the CLI exe uses the same <code>ffmpeg\</code>.</p>
-<p>README.txt must contain: what the tool does, the 4-step GUI procedure, the CLI one-liner, where outputs and logs go, the "never deletes your clips" promise, and the ffmpeg version bundled.</p>
-<hr>
+endlocal
+</code></pre>
+<p><code>app_dir()</code> in the frozen build is <code>dist\DashCamMerger\</code>, so <code>ffmpeg\</code> and <code>config.json</code> sit beside the
+exe exactly as Spec §4 shows. Both exes share the folder; the CLI exe uses the same <code>ffmpeg\</code>.</p>
+<p>README.txt must contain: what the tool does, the 4-step GUI procedure, the CLI one-liner, where
+outputs and logs go, the "never deletes your clips" promise, and the ffmpeg version bundled.</p>
+<hr />
 <h2 id="16-traceability-matrix">16. Traceability matrix</h2>
-<table><thead><tr><th>Requirement</th><th>Design location</th></tr></thead><tbody>
-<tr><td>FR-1.1</td><td>cli <code>--input</code>, gui Browse</td></tr>
-<tr><td>FR-1.2</td><td>scanner.scan, config.video_extensions</td></tr>
-<tr><td>FR-1.3</td><td>scanner step 3</td></tr>
-<tr><td>FR-1.4</td><td>scanner step 4</td></tr>
-<tr><td>FR-1.5</td><td>pipeline step 1, exit 3</td></tr>
-<tr><td>FR-2.1</td><td>cameras.BUILTIN_PROFILES</td></tr>
-<tr><td>FR-2.2</td><td>cameras.detect, MATCH_THRESHOLD</td></tr>
-<tr><td>FR-2.3</td><td>cameras.extract_tokens / apply_manual_map / parse_camera_map_arg, gui 9.3, cli 8.2</td></tr>
-<tr><td>FR-2.4</td><td>report.build_plan_summary, pipeline step 4, gui Scan table</td></tr>
-<tr><td>FR-2.5</td><td>config.profile_from_dict, cameras.detect (user profiles first)</td></tr>
-<tr><td>FR-3.1</td><td>ordering.parse_timestamp / parse_sequence / order_group</td></tr>
-<tr><td>FR-3.2</td><td>ordering.order_group (explicit key sort)</td></tr>
-<tr><td>FR-3.3</td><td>planner step 2 warning</td></tr>
-<tr><td>FR-3.4</td><td>ordering.detect_gaps, planner step 5</td></tr>
-<tr><td>FR-3.5</td><td>planner step 6 <code>trip gap</code></td></tr>
-<tr><td>FR-4.1</td><td>probe.sample_indices, planner step 3</td></tr>
-<tr><td>FR-4.2</td><td>models.StreamSignature, probe.signature_from_json</td></tr>
-<tr><td>FR-4.3</td><td>planner step 6 (single part, stream copy)</td></tr>
-<tr><td>FR-4.4</td><td>planner step 4 &amp; 6 <code>codec change</code>; concat.build_command re-encode branch</td></tr>
-<tr><td>FR-4.5</td><td>probe.probe_clip unreadable flag, planner step 4</td></tr>
-<tr><td>FR-5.1</td><td>planner step 7 list_path, concat.write_concat_list</td></tr>
-<tr><td>FR-5.2</td><td>concat.escape_concat_path</td></tr>
-<tr><td>FR-5.3</td><td>safe_io.write_text (utf-8, no BOM)</td></tr>
-<tr><td>FR-6.1</td><td>concat.build_command</td></tr>
-<tr><td>FR-6.2</td><td>pipeline step 0 output_dir, safe_io.unique_name, planner step 7</td></tr>
-<tr><td>FR-6.3</td><td>planner step 7</td></tr>
-<tr><td>FR-6.4</td><td>pipeline execute_part rename after PASS</td></tr>
-<tr><td>FR-6.5</td><td>pipeline step 7 executor</td></tr>
-<tr><td>FR-6.6</td><td>concat.run_ffmpeg progress events, progress.describe</td></tr>
-<tr><td>FR-6.7</td><td>concat.run_ffmpeg cancel, pipeline rename_incomplete</td></tr>
-<tr><td>FR-6.8</td><td>planner <code>max part size</code> only; no time cap anywhere</td></tr>
-<tr><td>FR-7.1</td><td>probe.probe_output</td></tr>
-<tr><td>FR-7.2</td><td>verify.ensure_all_probed</td></tr>
-<tr><td>FR-7.3</td><td>verify.verify_part tolerance</td></tr>
-<tr><td>FR-7.4</td><td>verify.verify_part size / ProbeError</td></tr>
-<tr><td>FR-7.5</td><td>pipeline execute_part FAIL branch</td></tr>
-<tr><td>FR-7.6</td><td>verify.sources_untouched, pipeline step 8</td></tr>
-<tr><td>FR-8.1–8.3</td><td>safe_io.WriteGuard, Section 12</td></tr>
-<tr><td>FR-9.1</td><td>report.build_report_text</td></tr>
-<tr><td>FR-9.2</td><td>report.write_report, logging_setup</td></tr>
-<tr><td>FR-9.3</td><td>gui Open output folder</td></tr>
-<tr><td>FR-10</td><td>config.py</td></tr>
-<tr><td>FR-11</td><td>cli.py, exit codes 8.3</td></tr>
-<tr><td>Spec §6 GUI</td><td>gui.py Section 9</td></tr>
-<tr><td>Spec §7 errors</td><td>pipeline step 0, winpath, planner step 4, concat/verify FAIL paths</td></tr>
-<tr><td>Spec §8 performance</td><td>stream copy only; probing sampled; no file content read by Python</td></tr>
-<tr><td>Spec §9 logging</td><td>logging_setup</td></tr>
-<tr><td>Spec §10 tests</td><td>Section 13</td></tr>
-<tr><td>Spec §11 build</td><td>Section 15</td></tr>
-</tbody></table></main></div></body></html>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Design location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-1.1</td>
+<td>cli <code>--input</code>, gui Browse</td>
+</tr>
+<tr>
+<td>FR-1.2</td>
+<td>scanner.scan, config.video_extensions</td>
+</tr>
+<tr>
+<td>FR-1.3</td>
+<td>scanner step 3</td>
+</tr>
+<tr>
+<td>FR-1.4</td>
+<td>scanner step 4</td>
+</tr>
+<tr>
+<td>FR-1.5</td>
+<td>pipeline step 1, exit 3</td>
+</tr>
+<tr>
+<td>FR-2.1</td>
+<td>cameras.BUILTIN_PROFILES</td>
+</tr>
+<tr>
+<td>FR-2.2</td>
+<td>cameras.detect, MATCH_THRESHOLD</td>
+</tr>
+<tr>
+<td>FR-2.3</td>
+<td>cameras.extract_tokens / apply_manual_map / parse_camera_map_arg, gui 9.3, cli 8.2</td>
+</tr>
+<tr>
+<td>FR-2.4</td>
+<td>report.build_plan_summary, pipeline step 4, gui Scan table</td>
+</tr>
+<tr>
+<td>FR-2.5</td>
+<td>config.profile_from_dict, cameras.detect (user profiles first)</td>
+</tr>
+<tr>
+<td>FR-3.1</td>
+<td>ordering.parse_timestamp / parse_sequence / order_group</td>
+</tr>
+<tr>
+<td>FR-3.2</td>
+<td>ordering.order_group (explicit key sort)</td>
+</tr>
+<tr>
+<td>FR-3.3</td>
+<td>planner step 2 warning</td>
+</tr>
+<tr>
+<td>FR-3.4</td>
+<td>ordering.detect_gaps, planner step 5</td>
+</tr>
+<tr>
+<td>FR-3.5</td>
+<td>planner step 6 <code>trip gap</code></td>
+</tr>
+<tr>
+<td>FR-4.1</td>
+<td>probe.sample_indices, planner step 3</td>
+</tr>
+<tr>
+<td>FR-4.2</td>
+<td>models.StreamSignature, probe.signature_from_json</td>
+</tr>
+<tr>
+<td>FR-4.3</td>
+<td>planner step 6 (single part, stream copy)</td>
+</tr>
+<tr>
+<td>FR-4.4</td>
+<td>planner step 4 &amp; 6 <code>codec change</code>; concat.build_command re-encode branch</td>
+</tr>
+<tr>
+<td>FR-4.5</td>
+<td>probe.probe_clip unreadable flag, planner step 4</td>
+</tr>
+<tr>
+<td>FR-5.1</td>
+<td>planner step 7 list_path, concat.write_concat_list</td>
+</tr>
+<tr>
+<td>FR-5.2</td>
+<td>concat.escape_concat_path</td>
+</tr>
+<tr>
+<td>FR-5.3</td>
+<td>safe_io.write_text (utf-8, no BOM)</td>
+</tr>
+<tr>
+<td>FR-6.1</td>
+<td>concat.build_command</td>
+</tr>
+<tr>
+<td>FR-6.2</td>
+<td>pipeline step 0 output_dir, safe_io.unique_name, planner step 7</td>
+</tr>
+<tr>
+<td>FR-6.3</td>
+<td>planner step 7</td>
+</tr>
+<tr>
+<td>FR-6.4</td>
+<td>pipeline execute_part rename after PASS</td>
+</tr>
+<tr>
+<td>FR-6.5</td>
+<td>pipeline step 7 executor</td>
+</tr>
+<tr>
+<td>FR-6.6</td>
+<td>concat.run_ffmpeg progress events, progress.describe</td>
+</tr>
+<tr>
+<td>FR-6.7</td>
+<td>concat.run_ffmpeg cancel, pipeline rename_incomplete</td>
+</tr>
+<tr>
+<td>FR-6.8</td>
+<td>planner <code>max part size</code> only; no time cap anywhere</td>
+</tr>
+<tr>
+<td>FR-7.1</td>
+<td>probe.probe_output</td>
+</tr>
+<tr>
+<td>FR-7.2</td>
+<td>verify.ensure_all_probed</td>
+</tr>
+<tr>
+<td>FR-7.3</td>
+<td>verify.verify_part tolerance</td>
+</tr>
+<tr>
+<td>FR-7.4</td>
+<td>verify.verify_part size / ProbeError</td>
+</tr>
+<tr>
+<td>FR-7.5</td>
+<td>pipeline execute_part FAIL branch</td>
+</tr>
+<tr>
+<td>FR-7.6</td>
+<td>verify.sources_untouched, pipeline step 8</td>
+</tr>
+<tr>
+<td>FR-8.1–8.3</td>
+<td>safe_io.WriteGuard, Section 12</td>
+</tr>
+<tr>
+<td>FR-9.1</td>
+<td>report.build_report_text</td>
+</tr>
+<tr>
+<td>FR-9.2</td>
+<td>report.write_report, logging_setup</td>
+</tr>
+<tr>
+<td>FR-9.3</td>
+<td>gui Open output folder</td>
+</tr>
+<tr>
+<td>FR-10</td>
+<td>config.py</td>
+</tr>
+<tr>
+<td>FR-11</td>
+<td>cli.py, exit codes 8.3</td>
+</tr>
+<tr>
+<td>FR-12</td>
+<td>cleanup.py Section 5.3.1, pipeline step 11, cli.py <code>--delete-source</code>, gui.py delete checkbox</td>
+</tr>
+<tr>
+<td>Spec §6 GUI</td>
+<td>gui.py Section 9</td>
+</tr>
+<tr>
+<td>Spec §7 errors</td>
+<td>pipeline step 0, winpath, planner step 4, concat/verify FAIL paths</td>
+</tr>
+<tr>
+<td>Spec §8 performance</td>
+<td>stream copy only; probing sampled; no file content read by Python</td>
+</tr>
+<tr>
+<td>Spec §9 logging</td>
+<td>logging_setup</td>
+</tr>
+<tr>
+<td>Spec §10 tests</td>
+<td>Section 13</td>
+</tr>
+<tr>
+<td>Spec §11 build</td>
+<td>Section 15</td>
+</tr>
+</tbody>
+</table></main></div></body></html>

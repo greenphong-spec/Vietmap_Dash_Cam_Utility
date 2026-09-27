@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from . import cameras, planner, scanner
+from . import cameras, cleanup, planner, scanner
 from .concat import build_command, run_ffmpeg, write_concat_list
 from .logging_setup import prune_old_logs, setup_logging
 from .models import (
@@ -63,18 +63,28 @@ class Confirmer(Protocol):
         self, tokens: dict[str, list[ClipInfo]]
     ) -> dict[str, CameraLabel] | None: ...  # FR-2.3
 
+    def confirm_delete(self, clips: list[ClipInfo]) -> bool: ...  # FR-12.3
+
 
 class AutoConfirmer:
     """Confirms everything; used with --yes and by the GUI merge step."""
 
-    def __init__(self, camera_map: dict[str, CameraLabel] | None = None) -> None:
+    def __init__(
+        self,
+        camera_map: dict[str, CameraLabel] | None = None,
+        confirm_delete_result: bool = True,
+    ) -> None:
         self.camera_map = camera_map
+        self.confirm_delete_result = confirm_delete_result
 
     def confirm_plan(self, summary: str) -> bool:
         return True
 
     def request_camera_map(self, tokens):
         return self.camera_map
+
+    def confirm_delete(self, clips: list[ClipInfo]) -> bool:
+        return self.confirm_delete_result
 
 
 def _rename_incomplete(guard: WriteGuard, part: OutputPart) -> Path | None:
@@ -218,32 +228,64 @@ def run(
 
     if not plan.parts:
         progress.emit(ProgressEvent(kind="log", message="Nothing to merge"))
-        return _finish(plan, [], clips, guard, progress, run_id, started)
-
-    # 6. Prepare.
-    guard.mkdir(output_dir)
-    guard.mkdir(temp_dir)
-
-    # 7. Execute parts (FR-6.5).
-    workers = max(1, opt.parallel if opt.parallel is not None else cfg.parallel_jobs)
-    results: list[PartResult] = []
-    if workers == 1:
-        for part in plan.parts:
-            result = _execute_part(part, cfg, opt, guard, progress, cancel)
-            results.append(result)
-            progress.emit(ProgressEvent(kind="part_done", part=part, result=result))
+        results: list[PartResult] = []
     else:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [
-                pool.submit(_execute_part, part, cfg, opt, guard, progress, cancel)
-                for part in plan.parts
-            ]
-            for future in futures:
-                result = future.result()
-                results.append(result)
-                progress.emit(ProgressEvent(kind="part_done", part=result.part, result=result))
+        # 6. Prepare.
+        guard.mkdir(output_dir)
+        guard.mkdir(temp_dir)
 
-    return _finish(plan, results, clips, guard, progress, run_id, started)
+        # 7. Execute parts (FR-6.5).
+        workers = max(1, opt.parallel if opt.parallel is not None else cfg.parallel_jobs)
+        results = []
+        if workers == 1:
+            for part in plan.parts:
+                result = _execute_part(part, cfg, opt, guard, progress, cancel)
+                results.append(result)
+                progress.emit(ProgressEvent(kind="part_done", part=part, result=result))
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = [
+                    pool.submit(_execute_part, part, cfg, opt, guard, progress, cancel)
+                    for part in plan.parts
+                ]
+                for future in futures:
+                    result = future.result()
+                    results.append(result)
+                    progress.emit(
+                        ProgressEvent(kind="part_done", part=result.part, result=result)
+                    )
+
+    report = _finish(plan, results, clips, guard, progress, run_id, started)
+
+    # 8. Optional source deletion (FR-12), gated on verification and confirmation.
+    if opt.delete_source and results:
+        deletable = cleanup.sources_for_deletion(results)
+        if not deletable:
+            progress.emit(
+                ProgressEvent(kind="log", message="No verified clips eligible for deletion")
+            )
+        elif confirmer.confirm_delete(deletable):
+            deleted, errors = cleanup.delete_sources(deletable, [output_dir, temp_dir])
+            report.deleted_sources = deleted
+            report.delete_errors = errors
+            for path in deleted:
+                log.info("Deleted source clip: %s", path)
+            for path, err in errors:
+                log.error("Could not delete source clip %s: %s", path, err)
+            summary = f"Deleted {len(deleted)} source clip(s)"
+            if errors:
+                summary += f", {len(errors)} could not be deleted"
+            progress.emit(ProgressEvent(kind="log", message=summary))
+            try:
+                write_report(guard, plan.output_dir, build_report_text(report))
+            except OSError as e:
+                log.error("Could not update merge_report.txt: %s", e)
+        else:
+            progress.emit(
+                ProgressEvent(kind="log", message="Source deletion not confirmed; original clips kept")
+            )
+
+    return report
 
 
 def _finish(

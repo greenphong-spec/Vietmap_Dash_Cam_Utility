@@ -129,6 +129,8 @@ class RunReport:
     started: datetime
     finished: datetime
     source_problems: list[str] = field(default_factory=list)
+    deleted_sources: list[Path] = field(default_factory=list)  # FR-12
+    delete_errors: list[tuple[Path, str]] = field(default_factory=list)  # FR-12
 
     @property
     def exit_code(self) -> int:
@@ -178,3 +180,4 @@ class RunOptions:  # everything the CLI/GUI can set per run
     dry_run: bool = False
     assume_yes: bool = False
     verbose: bool = False
+    delete_source: bool = False  # FR-12: permanently delete verified source clips

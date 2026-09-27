@@ -110,6 +110,23 @@ class GuiConfirmer:
         self.app.camera_map = mapping  # type: ignore[assignment]
         return mapping
 
+    def confirm_delete(self, clips: list[ClipInfo]) -> bool:
+        answered = threading.Event()
+        box: dict[str, object] = {}
+
+        def ask() -> None:
+            box["value"] = messagebox.askyesno(
+                TITLE,
+                f"Permanently delete {len(clips)} original clip file(s) that were "
+                "successfully merged?\n\nThis cannot be undone.",
+                icon="warning",
+            )
+            answered.set()
+
+        self.app.root.after(0, ask)
+        answered.wait()
+        return bool(box.get("value"))
+
 
 class App:
     def __init__(self, cfg: AppConfig) -> None:
@@ -178,6 +195,7 @@ class App:
         self.split_var = BooleanVar()
         self.reencode_var = BooleanVar()
         self.overwrite_var = BooleanVar()
+        self.delete_source_var = BooleanVar()
         ttk.Checkbutton(options, text="Split on trip gaps", variable=self.split_var).pack(side="left")
         ttk.Checkbutton(
             options, text="Re-encode if formats differ (slow)", variable=self.reencode_var
@@ -185,6 +203,11 @@ class App:
         ttk.Checkbutton(options, text="Overwrite existing outputs", variable=self.overwrite_var).pack(
             side="left"
         )
+        ttk.Checkbutton(
+            options,
+            text="Delete original clips after successful merge (cannot be undone)",
+            variable=self.delete_source_var,
+        ).pack(side="left", padx=8)
         # Second options row: at the 760 px default width everything does not
         # fit on one line, and a cut-off control is worse than a second row.
         options2 = ttk.Frame(root)
@@ -291,6 +314,7 @@ class App:
             overwrite=self.overwrite_var.get(),
             dry_run=dry_run,
             assume_yes=True,
+            delete_source=self.delete_source_var.get() and not dry_run,
         )
 
     # -------------------------------------------------------------- actions
@@ -348,8 +372,9 @@ class App:
         messagebox.showinfo(
             TITLE,
             f"DashCam Merger {__version__}\n\n{ffmpeg_version(self.cfg.ffmpeg_path)}\n\n"
-            "Merges dashcam clips losslessly. Your original files are never "
-            "deleted, moved or changed.",
+            "Merges dashcam clips losslessly. Your original files are never moved "
+            "or changed, and are only ever deleted if you explicitly enable "
+            "'Delete original clips after successful merge' and confirm it.",
         )
 
     def _on_close(self) -> None:

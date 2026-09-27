@@ -105,6 +105,13 @@ def build_report_text(report: RunReport) -> str:
         lines.append("Warnings:")
         lines.extend(f"  {w}" for w in plan.warnings)
 
+    if report.deleted_sources or report.delete_errors:
+        lines.append("")
+        lines.append(f"Source clips deleted: {len(report.deleted_sources)}")
+        if report.delete_errors:
+            lines.append(f"Source clips NOT deleted: {len(report.delete_errors)}")
+            lines.extend(f"  {path}: {reason}" for path, reason in report.delete_errors)
+
     return "\n".join(lines) + "\n"
 
 

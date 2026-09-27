@@ -8,10 +8,13 @@ DashCam Merger joins them back into ONE video per camera (Front, Rear,
 Interior), in the right order, without re-encoding. A two-hour trip becomes two
 files instead of two hundred.
 
-It never deletes, moves, renames or changes your original clips. The merged
-files are written into a new "merged" folder beside them. If anything goes
-wrong, the half-written file is kept under a name starting with
-INCOMPLETE_DO_NOT_USE_ so you can never mistake it for a finished video.
+It never moves, renames or changes your original clips, and only ever
+deletes them if you explicitly turn that on and confirm it (see "Deleting
+source clips after a successful merge" below) - by default nothing is
+deleted. The merged files are written into a new "merged" folder beside
+them. If anything goes wrong, the half-written file is kept under a name
+starting with INCOMPLETE_DO_NOT_USE_ so you can never mistake it for a
+finished video.
 
 No internet connection is needed. No administrator rights are needed.
 
@@ -50,9 +53,27 @@ Useful options:
     --keep-lists           keep the ffmpeg concat lists next to the outputs
     --verbose              detailed logging
     --config PATH          use a different config.json
+    --delete-source        permanently delete source clips whose output passed
+                            verification (prompts to confirm unless --yes is
+                            also given; never touches clips from a failed or
+                            cancelled part)
 
 Exit codes: 0 all good, 1 something failed verification, 2 wrong usage or
 missing ffmpeg, 3 no video files found, 130 cancelled.
+
+
+Deleting source clips after a successful merge
+-----------------------------------------------
+Off by default. Turn it on with the "Delete original clips after successful
+merge" checkbox in the GUI, or --delete-source on the command line. Either
+way you get one more explicit confirmation before anything is removed -
+listing exactly how many files - because this cannot be undone.
+
+Only clips whose merged output already passed the length/size check are
+ever touched; clips belonging to a FAILED or CANCELLED part are always kept,
+regardless of this setting. The report (on screen and in merge_report.txt)
+lists how many source clips were deleted, and names any that could not be
+removed.
 
 
 Where things end up

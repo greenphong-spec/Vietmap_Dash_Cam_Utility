@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Date:** 2026-09-14
-**Implements:** `DashCamMerger-Specification.md` v1.0 (all FR-1 … FR-11, sections 6–11)
+**Implements:** `DashCamMerger-Specification.md` v1.0 (all FR-1 … FR-12, sections 6–11)
 **Audience:** the developer or AI model that writes the code. Follow this document literally.
 
 ---
@@ -353,6 +353,29 @@ class WriteGuard:
 Tests (`test_safe_io` inside `test_planner.py` or own file): writing to input folder raises;
 writing to `output_dir/sub/file` allowed; `unique_name` yields `_2` then `_3`.
 
+#### 5.3.1 `core/cleanup.py` — FR-12 (opt-in exception to "never delete")
+
+A second, deliberately separate module — not routed through `WriteGuard` — that may
+permanently delete a *source* clip, and only that:
+
+```python
+def sources_for_deletion(results: list[PartResult]) -> list[ClipInfo]
+    # clips of every result with status == "PASS"; FAIL/CANCELLED/SKIPPED are never included
+
+def delete_sources(clips: list[ClipInfo], protected_roots: list[Path]
+                   ) -> tuple[list[Path], list[tuple[Path, str]]]
+    # os.remove() each clip not under a protected_root; returns (deleted, (path, error))
+```
+
+`pipeline.run()` calls this only when `RunOptions.delete_source` is set, after `_finish()`
+has already produced the report, and only after `Confirmer.confirm_delete(clips)` returns
+`True` — a confirmation kept separate from the FR-2.4 plan confirmation (Section 6, step 11)
+so that an auto-confirmed merge (`--yes` for the plan) does not silently also authorize
+deletion; the GUI always shows its own warning dialog for this regardless of
+`assume_yes` (Section 9). `protected_roots` is always `[output_dir, temp_dir]`, so a bug
+elsewhere that mislabels a merged output as a "source" cannot delete it. The safety-grep
+test (13.3) allowlists `cleanup.py` by name alongside `logging_setup.py`.
+
 ### 5.4 `core/scanner.py` — FR-1
 
 ```python
@@ -688,6 +711,7 @@ Tests: table header string equality; `format_duration(8584)` → `2:23:04`;
 class Confirmer(Protocol):
     def confirm_plan(self, summary: str) -> bool: ...                     # FR-2.4
     def request_camera_map(self, tokens: dict[str, list[ClipInfo]]) -> dict[str, CameraLabel] | None: ...  # FR-2.3
+    def confirm_delete(self, clips: list[ClipInfo]) -> bool: ...          # FR-12.2
 
 def run(cfg: AppConfig, opt: RunOptions, confirmer: Confirmer,
         progress: ProgressSink, cancel: threading.Event) -> RunReport
@@ -735,6 +759,13 @@ Exact sequence (each step logs INFO at start):
 8. **Sources check** (FR-7.6): `ok, problems = sources_untouched(all clips)`; log each problem at ERROR.
 9. **Report** (FR-9): `text = build_report_text(report)`; `write_report(guard, output_dir, text)`; emit `kind="report"` with text. Return `RunReport`.
 10. **Temp cleanup**: none. Temp lists stay in `%TEMP%` (the OS cleans it; the program never deletes). With `--keep-lists` they were written to `output_dir` instead.
+11. **Optional source deletion** (FR-12), only if `opt.delete_source` and there were results:
+    `deletable = cleanup.sources_for_deletion(results)`; if empty, log and skip. Otherwise
+    `if confirmer.confirm_delete(deletable):` call `cleanup.delete_sources(deletable, [output_dir, temp_dir])`,
+    store `(deleted, errors)` on the already-built `report`, log each outcome, emit a summary
+    `kind="log"` event, and rewrite `merge_report.txt` (step 9's `build_report_text` now
+    includes the deletion section) so the file on disk matches what was actually deleted.
+    If not confirmed, emit a "kept" log event and leave every source file alone.
 
 Exceptions defined in `pipeline.py`: `UsageError`, `ToolMissingError`, `NoInputError`, `CancelledError`
 (all subclass `PipelineError(Exception)`).
@@ -794,6 +825,7 @@ CLI and GUI):
 --keep-lists          store_true
 --parallel INT
 --dry-run             store_true
+--delete-source       store_true  -> RunOptions.delete_source (FR-12, default False)
 --verbose             store_true
 --version             action="version", "DashCamMerger %(version)s"
 --config PATH         optional path to config.json (not in spec; harmless addition, document in README)
@@ -803,6 +835,10 @@ CLI and GUI):
 
 - `CliConfirmer.confirm_plan(summary)`: print summary, then `input("Proceed with merge? [y/N] ")`; return `answer.strip().lower() in ("y", "yes")`. When stdin is not a TTY and `--yes` is absent, print `"Not a terminal; use --yes to skip confirmation"` and return False.
 - `CliConfirmer.request_camera_map(tokens)`: print each token with up to 5 sample names, then for each token `input(f"Camera for '{token}' [Front/Rear/Interior/Skip]: ")`; empty answer = Skip. Non-TTY → print hint to use `--camera-map` and return None.
+- `CliConfirmer.confirm_delete(clips)` (FR-12.2): if `--yes` was given, return `True` immediately —
+  no separate prompt. Otherwise `input(f"Permanently delete {n} source clip file(s)? ... Type 'yes' to continue: ")`;
+  only the literal `"yes"` (case-insensitive) confirms. Non-TTY without `--yes` → print a hint and return `False`
+  (files are kept).
 - Progress: `CallbackSink` printing `describe(ev)` on one line with `\r` for `progress` events, and full lines for other kinds. Print the report text at the end.
 - `Ctrl+C`: catch `KeyboardInterrupt` in `cli.main`, set `cancel`, wait for the pipeline to return, exit 130.
 
@@ -828,7 +864,8 @@ CLI and GUI):
 Row 0: [Label "Input folder"]  [Entry input_var (width 70)] [Button "Browse…"]
 Row 1: [Label "Output folder"] [Entry output_var]           [Button "Browse…"]
 Row 2: [Button "Scan"]  [Checkbutton "Split on trip gaps"] [Checkbutton "Re-encode if formats differ (slow)"]
-       [Checkbutton "Overwrite existing outputs"] [Label "Max part size (GB, 0 = unlimited)"] [Spinbox 0..64 step 1]
+       [Checkbutton "Overwrite existing outputs"] [Checkbutton "Delete original clips after successful merge
+       (cannot be undone)" - FR-12, default unchecked] [Label "Max part size (GB, 0 = unlimited)"] [Spinbox 0..64 step 1]
 Row 3: Treeview columns: Camera | Files | Total size | First clip | Last clip | Codec | Order source   (height 6)
 Row 4: [Button "Merge" (disabled until scan OK)] [Button "Cancel" (disabled until merging)] [Button "Open output folder" (disabled until done)]
 Row 5: Frame "progress_frame": one row per part -> Label(name) + ttk.Progressbar(length 400) + Label(status text)
@@ -844,6 +881,12 @@ Window title `"DashCam Merger 1.0.0"`, `geometry("760x560")`, `minsize(640, 480)
 - **Scan**: runs `pipeline.run` with `dry_run=True` in a worker thread (so probing does not freeze the UI). The `GuiConfirmer.request_camera_map` shows the modal dialog (Section 9.3) — it must be invoked on the Tk main thread: the worker puts a request on the queue and waits on a `threading.Event` for the answer. On `kind="plan"` fill the Treeview: per group: camera, file count, `format_size(sum)`, first/last clip names, codec = `f"{sig.v_codec} {w}x{h}"` from the first probed clip (or "mixed"), order source. Enable **Merge**. Store the chosen camera mapping so the real merge does not ask again.
 - **Merge**: new worker thread running `pipeline.run` with `dry_run=False`, `assume_yes=True` (the Scan table plus the Merge click *is* the confirmation required by FR-2.4), and the stored `camera_map`. Disable Scan/Merge, enable Cancel.
 - **Queue polling**: `root.after(100, poll)` drains the `queue.Queue`; `progress` → update the part's Progressbar (`value=percent`) and status label with `describe(ev)`; `log` → append to log pane; `part_done` → set label `PASS`/`FAIL`/`CANCELLED`; `report` → show report in a read-only Toplevel or in the log pane and enable **Open output folder** (`os.startfile(output_dir)`); `error` → `messagebox.showerror`.
+- **Delete original clips after successful merge** checkbox (FR-12) → `RunOptions.delete_source`,
+  forced `False` whenever `dry_run=True` (a Scan never deletes anything). When set,
+  `GuiConfirmer.confirm_delete(clips)` shows a `messagebox.askyesno` warning dialog naming the
+  exact file count, on the Tk main thread (same request/`threading.Event` bridge as
+  `request_camera_map`) — this fires every time, independent of the `assume_yes=True` used for
+  the merge-plan confirmation.
 - **Cancel**: `cancel.set()`; button text becomes "Cancelling…" until the worker finishes.
 - **Window close during merge** (`WM_DELETE_WINDOW`): same as Cancel, then wait for the worker (join with timeout 10 s), then destroy (Spec §7).
 - **About**: run `ffmpeg -version` (first line) and show it with `__version__`.
@@ -893,14 +936,16 @@ ffmpeg `-progress` keys used: `out_time_ms` (microseconds), `total_size`, `progr
 
 | Rule | Enforcement |
 |------|-------------|
-| FR-8.1 never write in input folder | `WriteGuard` allowed roots = `[output_dir, temp_dir]`; output cannot equal or contain input (Section 6 step 0). `grep` the code base for `unlink`, `rmtree`, `remove(` — only `logging_setup.prune_old_logs` may contain a delete, and only on `logs\merge_*.log`. |
+| FR-8.1 never write in input folder | `WriteGuard` allowed roots = `[output_dir, temp_dir]`; output cannot equal or contain input (Section 6 step 0). `grep` the code base for `unlink`, `rmtree`, `remove(` — only `logging_setup.prune_old_logs` and (opt-in, FR-12) `cleanup.py` may contain a delete. |
 | FR-8.2 only rename own files | `rename` is called only on `partial_path` and on a previous output when `--overwrite`; both are under `output_dir`. |
 | FR-8.3 overwrite never touches sources | `--overwrite` renames the old output to `*.replaced.mp4` and never deletes. |
 | FR-6.4 finished `.mp4` is always good | Only `verify_part` PASS leads to the rename from `.partial.mp4`. |
 | FR-7.6 | `sources_untouched` runs at the end of every non-dry run and is printed in the report. |
+| FR-12 source deletion stays opt-in and verification-gated | `RunOptions.delete_source` defaults `False`; `cleanup.sources_for_deletion` only returns clips of a `PASS` result; `Confirmer.confirm_delete` is required before any `os.remove`; `delete_sources` itself refuses paths under `[output_dir, temp_dir]`. |
 
 Unit test `test_safety_grep` (in `test_integration.py`): scan all `src\**\*.py` for the strings
-`unlink(`, `rmtree(`, `os.remove(`, `send2trash`; assert the only hit is in `logging_setup.py`.
+`unlink(`, `rmtree(`, `os.remove(`, `send2trash`; assert every hit is in `logging_setup.py` or
+`cleanup.py`.
 
 ---
 
@@ -1048,6 +1093,7 @@ outputs and logs go, the "never deletes your clips" promise, and the ffmpeg vers
 | FR-9.3 | gui Open output folder |
 | FR-10 | config.py |
 | FR-11 | cli.py, exit codes 8.3 |
+| FR-12 | cleanup.py Section 5.3.1, pipeline step 11, cli.py `--delete-source`, gui.py delete checkbox |
 | Spec §6 GUI | gui.py Section 9 |
 | Spec §7 errors | pipeline step 0, winpath, planner step 4, concat/verify FAIL paths |
 | Spec §8 performance | stream copy only; probing sampled; no file content read by Python |

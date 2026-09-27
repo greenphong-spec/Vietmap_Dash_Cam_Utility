@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-lists", action="store_true", help="keep concat lists next to outputs")
     parser.add_argument("--parallel", type=int, help="run N ffmpeg processes at once")
     parser.add_argument("--dry-run", action="store_true", help="show the plan, write nothing")
+    parser.add_argument(
+        "--delete-source",
+        action="store_true",
+        help="permanently delete source clips whose output passed verification "
+        "(prompts for confirmation unless --yes is also given)",
+    )
     parser.add_argument("--verbose", action="store_true", help="debug level logging")
     parser.add_argument("--config", type=Path, help="path to config.json")
     parser.add_argument(
@@ -73,6 +79,18 @@ class CliConfirmer:
             print("Not a terminal; use --yes to skip confirmation")
             return False
         return input("Proceed with merge? [y/N] ").strip().lower() in ("y", "yes")
+
+    def confirm_delete(self, clips: list[ClipInfo]) -> bool:
+        if self.assume_yes:
+            return True
+        if not self._interactive():
+            print("Not a terminal; source clips were kept (use --yes to confirm deletion)")
+            return False
+        answer = input(
+            f"Permanently delete {len(clips)} source clip file(s)? This cannot be undone. "
+            "Type 'yes' to continue: "
+        )
+        return answer.strip().lower() == "yes"
 
     def request_camera_map(
         self, tokens: dict[str, list[ClipInfo]]
@@ -135,6 +153,7 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         dry_run=args.dry_run,
         assume_yes=args.yes,
         verbose=args.verbose,
+        delete_source=args.delete_source,
     )
 
 

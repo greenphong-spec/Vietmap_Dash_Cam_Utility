@@ -2,6 +2,10 @@
 
 FR-8: nothing outside the run's allowed roots may ever be written or renamed.
 There is deliberately no delete/unlink method here. Do not add one.
+
+The one narrow, opt-in exception to "never delete" is cleanup.py (FR-12),
+which may remove verified *source* clips when the user explicitly asks for
+it. It is intentionally separate from WriteGuard, not routed through it.
 """
 
 from __future__ import annotations

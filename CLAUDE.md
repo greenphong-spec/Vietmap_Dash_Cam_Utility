@@ -6,12 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DashCam Merger: a Windows GUI + CLI tool that losslessly joins dashcam clip
 sequences (per camera: Front/Rear/Interior) into single video files via the
-ffmpeg concat demuxer, without re-encoding. It never deletes, moves, or
-renames source files. Behavior is governed by two documents in the repo root:
-`DashCamMerger-Specification.md` (requirements FR-1…FR-11) and
-`DashCamMerger-Design.md` (implementation design). `CHANGELOG.md` records
-where the shipped implementation deliberately diverges from the design doc —
-check it before assuming the design doc is current.
+ffmpeg concat demuxer, without re-encoding. It never moves or renames source
+files, and only ever deletes them via the explicit, off-by-default,
+verification-gated FR-12 opt-in (`--delete-source` / a GUI checkbox) —
+never as a side effect of any other feature. Behavior is governed by two
+documents in the repo root: `DashCamMerger-Specification.md` (requirements
+FR-1…FR-12) and `DashCamMerger-Design.md` (implementation design).
+`CHANGELOG.md` records where the shipped implementation deliberately
+diverges from the design doc — check it before assuming the design doc is
+current. The `.html` versions of both documents are a generated,
+sidebar-navigable render of the `.md` (source of truth) — after editing
+either `.md`, run `python tools\gen_docs.py` (needs `pip install markdown`)
+to resync the `.html`; don't hand-edit the `.html` files.
 
 ## Commands
 
@@ -77,10 +83,21 @@ constructed with an explicit allow-list of roots (`output_dir`, `temp_dir`).
 `WriteGuard.check()` resolves and rejects any path outside those roots.
 There is deliberately no delete method on `WriteGuard` — a failed or
 cancelled merge is kept as `INCOMPLETE_DO_NOT_USE_<name>` via `rename`, never
-removed. `logging_setup.prune_old_logs` (30-day log rotation) is the one
-exception to "the program never deletes," and lives outside `WriteGuard` on
-purpose. When touching any code path that writes a file, route it through
-`WriteGuard` and do not add a delete method to it.
+removed. `logging_setup.prune_old_logs` (30-day log rotation) and
+`cleanup.py` (FR-12: opt-in, verification-gated source deletion, see below)
+are the only two exceptions to "the program never deletes," and both live
+outside `WriteGuard` on purpose. When touching any code path that writes a
+file, route it through `WriteGuard` and do not add a delete method to it.
+
+`cleanup.py` is the sole place allowed to delete a *source* clip, and only
+when: `RunOptions.delete_source` is set (CLI `--delete-source` / GUI
+checkbox, both default off), the clip's output part status is `"PASS"`
+(`cleanup.sources_for_deletion`), and `Confirmer.confirm_delete()` returns
+`True` — a confirmation kept separate from the FR-2.4 plan confirmation, so
+GUI merges (which auto-confirm the plan) still show an explicit warning
+dialog before deleting. `test_integration.py`'s safety-grep test allowlists
+`cleanup.py` by name alongside `logging_setup.py`; don't add a delete call
+anywhere else without also updating that test.
 
 `models.py` holds the shared dataclasses (`ClipInfo`, `MergePlan`,
 `OutputPart`, `PartResult`, `RunReport`, etc.) passed between every stage

@@ -262,17 +262,61 @@ def test_it10_output_equal_to_input_exits_two(cfg, ffmpeg_path, tmp_path, capsys
     assert "not the input folder itself" in capsys.readouterr().err
 
 
-# ---------------------------------------------------------- safety grep
+# ---------------------------------------------------------------- FR-12 (source deletion)
+def test_delete_source_removes_only_verified_clips(cfg, ffmpeg_path, tmp_path):
+    clips_dir = tmp_path / "Movie"
+    make_clips(clips_dir, ffmpeg_path, camera_suffixes=("F",), count=4, seconds=1)
+
+    opt = RunOptions(input_dir=clips_dir, assume_yes=True, delete_source=True)
+    report = run(cfg, opt, AutoConfirmer(), NullSink(), threading.Event())
+
+    assert report.exit_code == 0
+    assert all(r.status == "PASS" for r in report.results)
+    assert len(list(clips_dir.glob("*.MP4"))) == 0  # sources gone
+    assert len(report.deleted_sources) == 4
+    assert report.delete_errors == []
+    merged = clips_dir / "merged"
+    assert list(merged.glob("*.mp4"))  # merged output itself is untouched
+    assert "Source clips deleted: 4" in (merged / "merge_report.txt").read_text(encoding="utf-8")
+
+
+def test_delete_source_not_confirmed_keeps_files(cfg, ffmpeg_path, tmp_path):
+    clips_dir = tmp_path / "Movie"
+    make_clips(clips_dir, ffmpeg_path, camera_suffixes=("F",), count=2, seconds=1)
+
+    opt = RunOptions(input_dir=clips_dir, assume_yes=True, delete_source=True)
+    report = run(
+        cfg, opt, AutoConfirmer(confirm_delete_result=False), NullSink(), threading.Event()
+    )
+
+    assert report.exit_code == 0
+    assert len(list(clips_dir.glob("*.MP4"))) == 2  # kept
+    assert report.deleted_sources == []
+
+
+def test_delete_source_without_flag_never_deletes(cfg, ffmpeg_path, tmp_path):
+    clips_dir = tmp_path / "Movie"
+    make_clips(clips_dir, ffmpeg_path, camera_suffixes=("F",), count=2, seconds=1)
+
+    opt = RunOptions(input_dir=clips_dir, assume_yes=True)
+    report = run(cfg, opt, AutoConfirmer(), NullSink(), threading.Event())
+
+    assert len(list(clips_dir.glob("*.MP4"))) == 2
+    assert report.deleted_sources == []
+
+
+# ---------------------------------------------------------------- safety grep
 @pytest.mark.parametrize("needle", ["unlink(", "rmtree(", "os.remove(", "send2trash"])
-def test_safety_grep_only_logging_setup_deletes(needle):
-    """Design Section 12: no delete anywhere except prune_old_logs."""
+def test_safety_grep_only_logging_setup_and_cleanup_delete(needle):
+    """Design Section 12: no delete anywhere except prune_old_logs and the
+    opt-in, verification-gated cleanup.py (FR-12)."""
     offenders = []
     for path in (ROOT / "src").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         for number, line in enumerate(text.splitlines(), start=1):
             if needle in line and not line.strip().startswith("#"):
                 offenders.append(f"{path.name}:{number}")
-    assert all(o.startswith("logging_setup.py") for o in offenders), offenders
+    assert all(o.startswith(("logging_setup.py", "cleanup.py")) for o in offenders), offenders
 
 
 def test_no_shell_true_anywhere():
