@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DashCam Merger for Android — Specification (as built)</title><style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#57606a;--line:#d0d7de;--code:#f6f8fa;--accent:#0969da;--th:#eef2f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--line:#30363d;--code:#161b22;--accent:#58a6ff;--th:#1c2128}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{display:flex;min-height:100vh}
+nav{width:300px;flex:none;border-right:1px solid var(--line);padding:16px;position:sticky;top:0;height:100vh;overflow:auto;font-size:13px}
+nav a{display:block;color:var(--fg);text-decoration:none;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav a:hover{color:var(--accent)}
+nav .l2{padding-left:0;font-weight:600;margin-top:6px}
+nav .l3{padding-left:14px}
+nav .l4{padding-left:28px;color:var(--muted)}
+main{flex:1;min-width:0;padding:24px 40px 80px;max-width:1100px}
+h1{font-size:28px;border-bottom:1px solid var(--line);padding-bottom:8px}
+h2{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:40px}
+h3{font-size:18px;margin-top:28px}
+h4{font-size:15px;margin-top:20px}
+code{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:0.9em;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow:auto;line-height:1.45}
+pre code{background:none;padding:0;font-size:12.5px}
+table{border-collapse:collapse;margin:12px 0;font-size:13.5px;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--line);padding:5px 9px;vertical-align:top;text-align:left}
+th{background:var(--th)}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+ul,ol{padding-left:26px}
+li{margin:3px 0}
+.meta{color:var(--muted)}
+@media (max-width:900px){.wrap{display:block}nav{position:static;width:auto;height:auto;border-right:0;border-bottom:1px solid var(--line)}main{padding:16px}}
+</style></head>
+<body><div class="wrap"><nav><strong>Contents</strong><a class="l2" href="#1-purpose-and-scope">1. Purpose and scope</a>
+<a class="l3" href="#11-problem">1.1 Problem</a>
+<a class="l3" href="#12-what-the-app-does">1.2 What the app does</a>
+<a class="l3" href="#13-non-goals-deliberately-not-built">1.3 Non-goals (deliberately not built)</a>
+<a class="l2" href="#2-platform-and-build-environment">2. Platform and build environment</a>
+<a class="l3" href="#21-target-device-and-os">2.1 Target device and OS</a>
+<a class="l3" href="#22-toolchain-versions-that-are-known-to-build">2.2 Toolchain (versions that are known to build)</a>
+<a class="l3" href="#23-build-test-install">2.3 Build, test, install</a>
+<a class="l2" href="#3-functional-requirements">3. Functional requirements</a>
+<a class="l3" href="#31-folder-selection-and-access">3.1 Folder selection and access</a>
+<a class="l3" href="#32-scanning-fr-1">3.2 Scanning (FR-1)</a>
+<a class="l3" href="#33-camera-detection-fr-2">3.3 Camera detection (FR-2)</a>
+<a class="l3" href="#34-ordering-and-gaps-fr-3">3.4 Ordering and gaps (FR-3)</a>
+<a class="l3" href="#35-probing-fr-4">3.5 Probing (FR-4)</a>
+<a class="l3" href="#36-planning-splitting-and-naming-fr-35-fr-44-fr-6">3.6 Planning, splitting and naming (FR-3.5, FR-4.4, FR-6)</a>
+<a class="l3" href="#37-merging-lossless-stream-copy">3.7 Merging (lossless stream copy)</a>
+<a class="l3" href="#38-verification-fr-7">3.8 Verification (FR-7)</a>
+<a class="l3" href="#39-report-fr-9">3.9 Report (FR-9)</a>
+<a class="l3" href="#310-plan-screen-fr-24">3.10 Plan screen (FR-2.4)</a>
+<a class="l3" href="#311-write-safety-fr-8">3.11 Write safety (FR-8)</a>
+<a class="l3" href="#312-options-persisted">3.12 Options (persisted)</a>
+<a class="l2" href="#4-user-interface">4. User interface</a>
+<a class="l3" href="#41-layout-top-to-bottom">4.1 Layout (top to bottom)</a>
+<a class="l3" href="#42-camera-mapping-list-ar-34">4.2 Camera-mapping list (AR-3.4)</a>
+<a class="l3" href="#43-state-machine">4.3 State machine</a>
+<a class="l3" href="#44-preferences">4.4 Preferences</a>
+<a class="l2" href="#5-architecture">5. Architecture</a>
+<a class="l3" href="#51-source-layout">5.1 Source layout</a>
+<a class="l3" href="#52-data-model-coremodelskt">5.2 Data model (`core/Models.kt`)</a>
+<a class="l3" href="#53-pipeline-mergesession">5.3 Pipeline (`MergeSession`)</a>
+<a class="l3" href="#54-manifest">5.4 Manifest</a>
+<a class="l3" href="#55-launcher-icon">5.5 Launcher icon</a>
+<a class="l2" href="#6-differences-from-the-desktop-version-summary">6. Differences from the desktop version (summary)</a>
+<a class="l2" href="#7-error-handling-and-edge-cases">7. Error handling and edge cases</a>
+<a class="l2" href="#8-known-limitations">8. Known limitations</a>
+<a class="l2" href="#9-verification">9. Verification</a>
+<a class="l3" href="#91-unit-tests-coretest-jvm-all-passing">9.1 Unit tests (`CoreTest`, JVM, all passing)</a>
+<a class="l3" href="#92-device-acceptance-tests-note-10-2026-09-27">9.2 Device acceptance tests (Note 10, 2026-09-27)</a>
+<a class="l3" href="#93-re-running-the-acceptance-test">9.3 Re-running the acceptance test</a>
+<a class="l2" href="#10-rebuild-checklist">10. Rebuild checklist</a></nav><main><h1 id="dashcam-merger-for-android-specification-as-built">DashCam Merger for Android — Specification (as built)</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document version</td>
+<td>1.0 — 2026-09-27</td>
+</tr>
+<tr>
+<td>App version</td>
+<td><code>1.0-android</code> (versionCode 1), package <code>com.phong.dashcammerger</code></td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Built, installed and verified on a Samsung Galaxy Note 10 (SM-N970F, Android 12)</td>
+</tr>
+<tr>
+<td>Source location</td>
+<td><code>Android_app_Ver/</code> in the DashCam Merger repository (commit <code>51ae98e</code>, later updates follow)</td>
+</tr>
+<tr>
+<td>Parent documents</td>
+<td><code>../DashCamMerger-Specification.md</code> (desktop FR-1…FR-12), <code>../DashCamMerger-Design.md</code></td>
+</tr>
+</tbody>
+</table>
+<p>This document describes <strong>what was actually built</strong>, in enough detail to rebuild the app
+from scratch without the source code. It is written as a rebuild reference: every rule,
+regular expression, threshold, file name and user-visible text that affects behaviour is
+listed. Requirement IDs <code>AR-x</code> (Android Requirement) are new; where a requirement ports a
+desktop requirement the desktop ID is given as <code>(FR-x)</code>.</p>
+<hr />
+<h2 id="1-purpose-and-scope">1. Purpose and scope</h2>
+<h3 id="11-problem">1.1 Problem</h3>
+<p>Dashcams (Vietmap, Xforce, 70mai, …) record 1-minute clips per camera, e.g.
+<code>20260924070830_0001446F.MP4</code> (Front) and <code>20260924070830_0001447R.MP4</code> (Rear). Watching a
+trip means opening dozens of files. The desktop tool (Windows, Python + ffmpeg) joins them;
+this app does the same <strong>on the phone</strong>, directly from the dashcam's SD card (or a card
+reader on USB-OTG), without a PC.</p>
+<h3 id="12-what-the-app-does">1.2 What the app does</h3>
+<ol>
+<li>The user picks the dashcam folder (input) and optionally a different output folder
+   (typical use: input on the SD card, output in the phone's <code>Movies/</code>).</li>
+<li>The app finds all clips, works out which camera each clip belongs to, orders them in
+   time, and shows a <strong>plan</strong>: which output files will be written, from how many clips,
+   total duration and size, and warnings (gaps, unreadable files, space).</li>
+<li>On <strong>Merge</strong>, each camera's clips are joined into one MP4 per trip part <strong>losslessly</strong>
+   (compressed samples are copied, never decoded or re-encoded).</li>
+<li>Each output is verified (duration and size) before it gets its final name, and a
+   <code>merge_report.txt</code> is written next to the outputs.</li>
+</ol>
+<h3 id="13-non-goals-deliberately-not-built">1.3 Non-goals (deliberately not built)</h3>
+<ul>
+<li>No re-encoding, trimming, overlays, speed-up, or format conversion.</li>
+<li>No deletion of source clips (desktop FR-12 <code>--delete-source</code> is <strong>not</strong> ported). The app
+  never deletes any file.</li>
+<li>No <code>config.json</code>, no user-defined camera profiles, no CLI, no parallel merge jobs.</li>
+<li>No background/foreground service: merging runs while the app is open (screen kept on).</li>
+<li>No network access, no analytics, no storage permissions.</li>
+</ul>
+<hr />
+<h2 id="2-platform-and-build-environment">2. Platform and build environment</h2>
+<h3 id="21-target-device-and-os">2.1 Target device and OS</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reference device</td>
+<td>Samsung Galaxy Note 10, SM-N970F, <code>arm64-v8a</code>, Android 12 (API 31)</td>
+</tr>
+<tr>
+<td><code>minSdk</code></td>
+<td>28 (Android 9)</td>
+</tr>
+<tr>
+<td><code>targetSdk</code> / <code>compileSdk</code></td>
+<td>36</td>
+</tr>
+<tr>
+<td>Native code</td>
+<td>None (APK contains no <code>.so</code>; pure Kotlin/JVM)</td>
+</tr>
+<tr>
+<td>Permissions in manifest</td>
+<td><strong>None</strong>. Folder access is granted per folder through the system picker (Storage Access Framework, persisted URI permissions).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-toolchain-versions-that-are-known-to-build">2.2 Toolchain (versions that are known to build)</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JDK</td>
+<td>Temurin 17 (<code>jdk-17.0.20.8-hotspot</code>)</td>
+</tr>
+<tr>
+<td>Gradle (wrapper)</td>
+<td>8.14.5 (<code>gradle-8.14.5-bin.zip</code>)</td>
+</tr>
+<tr>
+<td>Android Gradle Plugin</td>
+<td>8.13.2</td>
+</tr>
+<tr>
+<td>Kotlin (+ Compose compiler plugin)</td>
+<td>2.4.10</td>
+</tr>
+<tr>
+<td>Compose BOM</td>
+<td>2026.06.01</td>
+</tr>
+<tr>
+<td><code>androidx.core:core-ktx</code></td>
+<td>1.18.0</td>
+</tr>
+<tr>
+<td><code>androidx.lifecycle:lifecycle-runtime-ktx</code></td>
+<td>2.10.0</td>
+</tr>
+<tr>
+<td><code>androidx.activity:activity-compose</code></td>
+<td>1.12.0</td>
+</tr>
+<tr>
+<td>Compose artifacts</td>
+<td><code>ui</code>, <code>ui-graphics</code>, <code>material3</code> (versions from BOM)</td>
+</tr>
+<tr>
+<td>Unit tests</td>
+<td><code>junit:junit:4.13.2</code></td>
+</tr>
+<tr>
+<td>Android SDK</td>
+<td>platform <code>android-36</code>, build-tools 35.0.0</td>
+</tr>
+</tbody>
+</table>
+<p>Newer AndroidX versions (core-ktx 1.19, activity-compose 1.13, lifecycle 2.11) require
+compileSdk 37 / AGP 9.1 and must <strong>not</strong> be used with the setup above.</p>
+<p>Java/Kotlin target: <code>JavaVersion.VERSION_17</code>, <code>jvmTarget = JVM_17</code>. Minification off in
+both debug and release. <code>gradle.properties</code>: <code>org.gradle.jvmargs=-Xmx2048m
+-Dfile.encoding=UTF-8</code>, <code>org.gradle.parallel=true</code>, <code>org.gradle.caching=true</code>,
+<code>android.useAndroidX=true</code>, <code>android.nonTransitiveRClass=true</code>,
+<code>kotlin.code.style=official</code>. <code>settings.gradle.kts</code> uses the standard <code>google()</code> (restricted
+to <code>com.android.*</code>, <code>com.google.*</code>, <code>androidx.*</code> groups), <code>mavenCentral()</code>,
+<code>gradlePluginPortal()</code> repositories, <code>RepositoriesMode.FAIL_ON_PROJECT_REPOS</code>, root project
+name <code>DashCamMerger</code>, one module <code>:app</code>.</p>
+<h3 id="23-build-test-install">2.3 Build, test, install</h3>
+<pre><code>gradlew.bat testDebugUnitTest       # 9 JVM unit tests, no device needed
+gradlew.bat assembleDebug           # app\build\outputs\apk\debug\app-debug.apk (~29 MB)
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+</code></pre>
+<p>Wireless debugging: <em>Settings → Developer options → Wireless debugging</em>, then
+<code>adb pair &lt;ip&gt;:&lt;pairing-port&gt;</code> and <code>adb connect &lt;ip&gt;:&lt;port&gt;</code>.</p>
+<p><code>local.properties</code> (not committed) holds <code>sdk.dir=C\:\\Android\\Sdk</code>.</p>
+<hr />
+<h2 id="3-functional-requirements">3. Functional requirements</h2>
+<h3 id="31-folder-selection-and-access">3.1 Folder selection and access</h3>
+<ul>
+<li><strong>AR-1.1</strong> The user selects the <strong>input folder</strong> with the system folder picker
+  (<code>ACTION_OPEN_DOCUMENT_TREE</code>). Any provider the picker offers may be used; the supported
+  and tested one is external storage (phone storage, SD card, USB-OTG card reader).</li>
+<li><strong>AR-1.2</strong> On selection the app takes a <strong>persistable</strong> read+write URI permission and
+  stores the tree URI in preferences, so the choice survives restarts.</li>
+<li><strong>AR-1.3</strong> The user may select a separate <strong>output folder</strong> the same way (read+write,
+  persisted). A <strong>Use default</strong> button clears it.</li>
+<li><strong>AR-1.4</strong> Output location rule:</li>
+<li>no output folder chosen → <code>&lt;input folder&gt;/merged</code> (created if missing; an existing
+    child named <code>merged</code> in any letter case is reused);</li>
+<li>output folder chosen <strong>and</strong> it is the same tree as the input (same tree document ID)
+    → treated as "not chosen" (default <code>merged/</code> subfolder);</li>
+<li>otherwise → files are written <strong>directly into</strong> the chosen folder (no subfolder).</li>
+<li><strong>AR-1.5</strong> Folders are shown as <code>Phone: /&lt;path&gt;</code> for the primary volume and
+  <code>SD card/USB (&lt;volume-id&gt;): /&lt;path&gt;</code> for other volumes, derived from the tree document
+  ID <code>&lt;volume&gt;:&lt;path&gt;</code> (e.g. <code>1721-8D53:Vietmap_M1/Movie</code>).</li>
+<li><strong>AR-1.6</strong> Changing input or output folder resets the session to Idle (discarding any
+  shown plan).</li>
+</ul>
+<h3 id="32-scanning-fr-1">3.2 Scanning (FR-1)</h3>
+<ul>
+<li><strong>AR-2.1</strong> The input tree is walked <strong>recursively</strong> (breadth-first) with
+  <code>DocumentsContract</code> child queries (<code>DOCUMENT_ID, DISPLAY_NAME, MIME_TYPE, SIZE,
+  LAST_MODIFIED</code>).</li>
+<li><strong>AR-2.2</strong> A file is a clip when its extension (case-insensitive) is one of
+  <code>mp4, mov, ts, mkv, 3gp</code>. (<code>.avi</code> from the desktop list is excluded: Android's
+  <code>MediaExtractor</code> cannot read it.)</li>
+<li><strong>AR-2.3</strong> Skipped: any sub-folder named <code>merged</code> (case-insensitive) (FR-1.3); the output
+  folder itself if it lies inside the input tree (matched by document ID) (FR-1.3); any
+  file whose name starts with <code>INCOMPLETE_DO_NOT_USE_</code> (FR-1.4).</li>
+<li><strong>AR-2.4</strong> Each clip records: document URI, file name, parent folder name, size in bytes,
+  last-modified time (ms). Scan results are sorted by lower-cased URI for determinism.</li>
+<li><strong>AR-2.5</strong> No clips found → state <em>Error</em>, status <code>No video files found</code>, text
+  <code>No mp4/mov/ts/mkv/3gp files in this folder or its subfolders.</code> (FR-1.5)</li>
+<li><strong>AR-2.6</strong> The output folder is opened (and <code>merged/</code> created if needed) at the start of
+  the scan, before any clip is read.</li>
+</ul>
+<h3 id="33-camera-detection-fr-2">3.3 Camera detection (FR-2)</h3>
+<ul>
+<li><strong>AR-3.1</strong> Built-in profiles are tried <strong>in this order</strong>; the first profile that labels
+  <strong>≥ 90 %</strong> of all clips wins (FR-2.2). Matching is case-insensitive; "name" profiles
+  match the file name, "parent" profiles match the containing folder name. The token
+  captured in group <code>cam</code> is upper-cased and looked up in the profile's map; a clip counts
+  as matched only if the token is in the map.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Profile</th>
+<th>Scope</th>
+<th>Token → camera</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Xforce</td>
+<td>name</td>
+<td>F→Front, R→Rear</td>
+</tr>
+<tr>
+<td>2</td>
+<td>SuffixLetter</td>
+<td>name</td>
+<td>F, A→Front; R, B→Rear; I→Interior</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Word</td>
+<td>name</td>
+<td>FRONT→Front; REAR, BACK→Rear; INSIDE, INTERIOR, CABIN→Interior</td>
+</tr>
+<tr>
+<td>4</td>
+<td>CamN</td>
+<td>name</td>
+<td>1→Front, 2→Rear, 3→Interior</td>
+</tr>
+<tr>
+<td>5</td>
+<td>70mai</td>
+<td>name</td>
+<td>F→Front, B→Rear</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Folder</td>
+<td>parent</td>
+<td>FRONT, F, NORMAL→Front; REAR, R, BACK, B→Rear; INTERIOR, INSIDE, CABIN, I→Interior</td>
+</tr>
+</tbody>
+</table>
+<p>Regular expressions (Java syntax, compiled with <code>Pattern.CASE_INSENSITIVE</code>, applied with
+<code>find()</code>), exactly as used:</p>
+<pre><code>1 Xforce        ^(?&lt;ts&gt;\d{14})_(?&lt;seq&gt;\d+)(?&lt;cam&gt;[FR])\.(?:mp4|mov)$
+2 SuffixLetter  _(?&lt;cam&gt;[FRABI])\.[A-Za-z0-9]+$
+3 Word          (?&lt;cam&gt;FRONT|REAR|BACK|INSIDE|INTERIOR|CABIN)
+4 CamN          CAM(?&lt;cam&gt;[1-3])
+5 70mai         ^(?:NO|EV|PA)?\d{4}[-_]?\d{4}[-_]\d{6}[-_]\d+(?&lt;cam&gt;[FB])\.[A-Za-z0-9]+$
+6 Folder        ^(?&lt;cam&gt;front|f|normal|rear|r|back|b|interior|inside|cabin|i)$
+</code></pre>
+<ul>
+<li><strong>AR-3.2</strong> The Xforce profile also sets the clip's timestamp from group <code>ts</code>
+  (<code>yyyyMMddHHmmss</code>) and its sequence number from group <code>seq</code>. Vietmap M1 files
+  (<code>20260924070830_0001446F.MP4</code>) match this profile.</li>
+<li><strong>AR-3.3</strong> Before each profile is tried, all labels are reset to <em>Unclassified</em>.</li>
+<li><strong>AR-3.4</strong> <strong>Manual mapping</strong> (FR-2.3): if no profile reaches 90 %, clips are grouped by a
+  token and the user assigns each token to Front / Rear / Interior / Skip:</li>
+<li>if the clips live in more than one folder, token = <code>folder:&lt;parent folder name&gt;</code>;</li>
+<li>otherwise token = the letters immediately before the extension (regex
+    <code>([A-Za-z]+)\.[A-Za-z0-9]+$</code>, upper-cased), or <code>ALL</code> if there are none.</li>
+<li>Tokens are listed sorted. Tokens the user leaves unassigned become <em>Unclassified</em>;
+    <em>Skip</em> clips are ignored silently.</li>
+<li><strong>AR-3.5</strong> Output groups are built in the order Front, Rear, Interior; groups with no
+  clips are omitted. Unclassified clips are counted in the plan and report but not merged.</li>
+</ul>
+<h3 id="34-ordering-and-gaps-fr-3">3.4 Ordering and gaps (FR-3)</h3>
+<ul>
+<li><strong>AR-4.1</strong> For every clip the file stem (name without extension) is parsed:</li>
+<li><strong>Timestamp</strong>, first valid match of, in order:
+    <code>TS14 = (?&lt;!\d)(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?!\d)</code> then
+    <code>TS_SEP = (?&lt;!\d)(\d{4})[-_]?(\d{2})[-_]?(\d{2})[-_T ](\d{2})[-_:.]?(\d{2})[-_:.]?(\d{2})(?!\d)</code>.
+    Matches that are not a valid date/time (e.g. month 13) are skipped and the next match
+    is tried. Result is a local date-time (no time zone).</li>
+<li><strong>Sequence</strong> = the <strong>last</strong> run of 3+ digits <code>(?&lt;!\d)(\d{3,})(?!\d)</code> that does not
+    overlap the timestamp match.</li>
+<li>Values already set by the camera profile are kept.</li>
+<li><strong>AR-4.2</strong> Each camera group is sorted by the strongest key that <strong>all</strong> its clips have
+  (FR-3.1/3.2):</li>
+<li>all have a timestamp → by (timestamp, sequence or 0, lower-case name);</li>
+<li>else all have a sequence → by (sequence, lower-case name), warning
+     <code>&lt;Camera&gt;: order based on sequence number in filename</code>;</li>
+<li>else → by (mtime, lower-case name), warning
+     <code>&lt;Camera&gt;: order based on file modification time, please spot-check</code> (FR-3.3).</li>
+<li><strong>AR-4.3</strong> Gaps (FR-3.4), only for timestamp-ordered groups: for consecutive clips A, B:
+  <code>gap = (B.timestamp − A.timestamp in whole seconds) − A.duration</code>, where A.duration is
+  the probed duration, or 60 s if unknown. A gap <strong>&gt; 300 s</strong> produces the warning
+  <code>&lt;Camera&gt;: gap of &lt;minutes, 1 decimal&gt; min between &lt;A name&gt; and &lt;B name&gt;</code>.</li>
+</ul>
+<h3 id="35-probing-fr-4">3.5 Probing (FR-4)</h3>
+<ul>
+<li><strong>AR-5.1</strong> <strong>Every</strong> clip of every camera group is probed (not sampled), with a pool of
+  <strong>4 worker threads</strong>. Progress is shown as <code>Reading &lt;Camera&gt; clips… &lt;done&gt; / &lt;total&gt;</code>.</li>
+<li><strong>AR-5.2</strong> Probing opens the clip with <code>MediaExtractor.setDataSource(context, uri)</code> and
+  selects tracks:</li>
+<li>video = first track whose MIME starts with <code>video/</code>;</li>
+<li>audio = first <code>audio/</code> track <strong>if</strong> its MIME is muxable (<code>audio/mp4a-latm</code> (AAC),
+    <code>audio/3gpp</code> (AMR-NB), <code>audio/amr-wb</code>); if the first audio track is not muxable it is
+    recorded as <em>dropped</em> and no other audio track is considered.</li>
+<li><strong>AR-5.3</strong> A clip is <strong>unreadable</strong> (with this reason) when: opening throws (reason =
+  exception message); <code>no video track</code>; video MIME not in {<code>video/avc</code>, <code>video/hevc</code>,
+  <code>video/mp4v-es</code>, <code>video/3gpp</code>} → <code>video codec &lt;mime&gt; cannot be stream-copied to MP4</code>;
+  duration ≤ 0 → <code>no duration (file may be truncated)</code>.</li>
+<li><strong>AR-5.4</strong> Duration = max(video <code>KEY_DURATION</code>, audio <code>KEY_DURATION</code>) in microseconds.</li>
+<li><strong>AR-5.5</strong> <strong>Stream signature</strong> (two strings; clips can only share an output if both are
+  equal):</li>
+<li>video: <code>&lt;mime&gt; &lt;width&gt;x&lt;height&gt; rot&lt;rotation&gt; csd:&lt;h0&gt;/&lt;h1&gt;/&lt;h2&gt;</code></li>
+<li>audio: <code>&lt;mime&gt; &lt;sampleRate&gt;Hz &lt;channels&gt;ch csd:&lt;…&gt;</code> or <code>none</code></li>
+</ul>
+<p>where <code>h0…h2</code> are hex <code>Arrays.hashCode</code> values of the <code>csd-0</code>, <code>csd-1</code>, <code>csd-2</code> codec
+  config buffers that exist. Including the codec config (SPS/PPS) is required because
+  <code>MediaMuxer</code> takes the track format from the <strong>first</strong> clip only.
+- <strong>AR-5.6</strong> Description for the plan: <code>H.264|H.265|MPEG-4|H.263 &lt;w&gt;x&lt;h&gt;</code> plus
+  <code>+ AAC|AMR|AMR-WB</code> when audio is copied.
+- <strong>AR-5.7</strong> Unreadable clips are removed from their group and listed in warnings as
+  <code>&lt;Camera&gt;: skipped unreadable file &lt;name&gt; (&lt;reason&gt;)</code> (FR-4.5). If a group has dropped
+  audio: <code>&lt;Camera&gt;: audio not copied (&lt;mime&gt; cannot be stored in MP4), video only</code>. If a
+  group ends up empty: <code>&lt;Camera&gt;: no readable clips left, nothing to merge</code>.</p>
+<h3 id="36-planning-splitting-and-naming-fr-35-fr-44-fr-6">3.6 Planning, splitting and naming (FR-3.5, FR-4.4, FR-6)</h3>
+<ul>
+<li><strong>AR-6.1</strong> Walking each ordered group, a <strong>new output part</strong> starts before clip C when
+  (checked in this priority order):</li>
+<li>C's signature differs from the current part's signature → reason <code>codec change</code>
+     (FR-4.4);</li>
+<li>option <em>trip gap</em> is on and the gap before C is <strong>&gt; 1800 s</strong> → <code>trip gap</code> (FR-3.5);</li>
+<li>option <em>3.9 GB</em> is on and current part bytes + C's size &gt; 3.9 × 1024³ bytes →
+     <code>max part size</code> (FR-6.8).</li>
+</ul>
+<p>Each split adds the warning <code>&lt;Camera&gt; part &lt;n&gt;: new part started because of &lt;reason&gt;</code>.
+- <strong>AR-6.2</strong> Expected duration of a part = sum of its clips' probed durations; expected
+  size = sum of its clips' sizes.
+- <strong>AR-6.3</strong> Output name (FR-6.3):
+  <code>&lt;Camera&gt;_&lt;first&gt;_to_&lt;last&gt;.mp4</code>, with <code>_part&lt;n&gt;</code> appended to the stem when the camera
+  has more than one part. <code>&lt;first&gt;</code>/<code>&lt;last&gt;</code> are the first/last clip's timestamp as
+  <code>yyyyMMddHHmmss</code>, or the clip's file stem if it has no timestamp.
+  Example: <code>Front_20260924070830_to_20260924073130_part1.mp4</code>.
+- <strong>AR-6.4</strong> Collisions (FR-6.2): if the name exists in the output folder, or was already
+  given to another part in this plan, try <code>&lt;stem&gt;_2.mp4</code>, <code>&lt;stem&gt;_3.mp4</code>, … until free.
+  Existing files are never overwritten.
+- <strong>AR-6.5</strong> Each part is first written as <code>&lt;final stem&gt;.partial.mp4</code>.</p>
+<h3 id="37-merging-lossless-stream-copy">3.7 Merging (lossless stream copy)</h3>
+<ul>
+<li><strong>AR-7.1</strong> Parts are processed sequentially. For each part:</li>
+<li>create <code>&lt;stem&gt;.partial.mp4</code> (MIME <code>video/mp4</code>) in the output folder;</li>
+<li>open it <code>"rw"</code> and create <code>MediaMuxer(fd, MUXER_OUTPUT_MPEG_4)</code>;</li>
+<li>for each clip in order, open a <code>MediaExtractor</code>, select the same tracks as in
+     probing, and copy samples (below);</li>
+<li><code>muxer.stop()</code>; then verify (§3.8).</li>
+<li><strong>AR-7.2</strong> Muxer set-up happens on the <strong>first clip</strong> of the part: <code>addTrack</code> with the
+  first clip's video format, then its audio format if audio is copied;
+  <code>setOrientationHint(KEY_ROTATION)</code> if the video format carries a rotation; <code>start()</code>.</li>
+<li><strong>AR-7.3</strong> <strong>Timestamp algorithm</strong> (per clip):</li>
+<li><code>base</code> = the extractor's first sample time after selecting the tracks (clamped ≥ 0),
+    i.e. the earliest sample of the clip;</li>
+<li><code>offset</code> = running output time, starting at 0 for the part;</li>
+<li>each sample is written with <code>pts_out = offset + (pts_in − base)</code>, unchanged bytes,
+    <code>BUFFER_FLAG_KEY_FRAME</code> iff the extractor reports <code>SAMPLE_FLAG_SYNC</code>;</li>
+<li>audio only: if <code>pts_out ≤</code> the previous audio <code>pts_out</code>, use previous + 1 µs (keeps
+    audio strictly increasing across clip joins);</li>
+<li>per track remember the last sample-to-sample delta; the clip's end =
+    max over samples of <code>(pts_in − base + delta_of_that_track)</code>;</li>
+<li>after the clip: <code>offset += clip end</code>.</li>
+</ul>
+<p>Samples are read in the file's own interleaving order (both tracks selected on one
+  extractor), so the output interleaving mirrors the source.
+- <strong>AR-7.4</strong> Sample buffer: one direct <code>ByteBuffer</code> of <strong>16 MiB</strong> (enough for a 4K
+  keyframe).
+- <strong>AR-7.5</strong> Cancellation is checked before each clip and before each sample. On cancel or
+  any exception the muxer is released and the partial file is <strong>kept</strong> and renamed to
+  <code>INCOMPLETE_DO_NOT_USE_&lt;final stem&gt;.mp4</code> (<code>_2</code>, <code>_3</code>… if taken) (FR-6.5). If that
+  rename fails the file keeps its <code>.partial.mp4</code> name.
+- <strong>AR-7.6</strong> Progress = bytes of samples copied / total expected bytes of all parts, UI
+  updated at most every 200 ms. Status line: <code>Part &lt;i&gt;/&lt;n&gt;: &lt;output name&gt;</code>.</p>
+<h3 id="38-verification-fr-7">3.8 Verification (FR-7)</h3>
+<ul>
+<li><strong>AR-8.1</strong> After <code>stop()</code>, the partial file is re-opened with <code>MediaExtractor</code>; its
+  duration is the max <code>KEY_DURATION</code> across its tracks.</li>
+<li><strong>AR-8.2</strong> <strong>PASS</strong> requires both:</li>
+<li><code>|actual − expected| ≤ max(1.0 s, 0.1 % × expected)</code>; and</li>
+<li><code>actual size ≥ 90 %</code> of the summed source sizes.</li>
+<li><strong>AR-8.3</strong> PASS → rename <code>.partial.mp4</code> → final name (FR-6.4). FAIL → rename to
+  <code>INCOMPLETE_DO_NOT_USE_…</code> with reason(s): <code>output cannot be read back</code>,
+  <code>duration &lt;a&gt;s vs expected &lt;e&gt;s</code>, <code>size &lt;n&gt; &lt; 90% of &lt;m&gt;</code> (joined with <code>;</code>).</li>
+<li><strong>AR-8.4</strong> After all parts: every source clip is re-queried; a clip that is missing or
+  whose size changed is reported as <code>&lt;name&gt;: changed or missing</code> and the report shows
+  <code>Sources untouched: CHANGED</code> (FR-7.6). (Android checks size only, not mtime.)</li>
+</ul>
+<h3 id="39-report-fr-9">3.9 Report (FR-9)</h3>
+<ul>
+<li><strong>AR-9.1</strong> <code>merge_report.txt</code> (UTF-8, <code>\n</code>) is written into the output folder after
+  every merge run (replacing an earlier report there). Format:</li>
+</ul>
+<pre><code>Front part 1: Front_20260924070830_to_20260924073130_part1.mp4
+    24 files, 0:23:07, 2.33 GB  -&gt;  PASS
+Rear part 1: Rear_20260924070830_to_20260924073130_part1.mp4
+    24 files, 0:23:07, 1.60 GB  -&gt;  PASS
+Unclassified: 0   Skipped unreadable: 0   Sources untouched: OK
+Output folder: Phone: /Movies/DashMerged
+
+Warnings:
+  Front: gap of 494.6 min between 20260924073130_0001492F.MP4 and 20260924154610_0001494F.MP4
+  Front part 2: new part started because of trip gap
+</code></pre>
+<p>For non-PASS parts the status is followed by <code>(&lt;reason&gt;)</code> and the file name is the
+  <code>INCOMPLETE_…</code> name. A <code>Source problems:</code> section appears when AR-8.4 found any.
+- <strong>AR-9.2</strong> Formats: duration <code>H:MM:SS</code> (rounded seconds); size <code>x.xx GB</code> (≥ 1 GiB),
+  <code>x.x MB</code> (≥ 1 MiB) else <code>x.x KB</code>, 1024-based, <code>.</code> decimal separator.
+- <strong>AR-9.3</strong> The same text is shown on screen when the run finishes.</p>
+<h3 id="310-plan-screen-fr-24">3.10 Plan screen (FR-2.4)</h3>
+<ul>
+<li><strong>AR-10.1</strong> Plan text:</li>
+</ul>
+<pre><code>Front: 3 files, 10.6 MB  [H.264 1280x720 + AAC]
+Rear: 3 files, 10.6 MB  [H.264 1280x720 + AAC]
+Unclassified: 0
+Unreadable: 0
+Parts to write: 2
+  Front_20260927120000_to_20260927120200.mp4  (3 clips, 0:00:30, 10.6 MB)
+  Rear_20260927120000_to_20260927120200.mp4  (3 clips, 0:00:30, 10.6 MB)
+Output folder: Phone: /Movies/DashMerged
+Warnings:
+  …
+Free space there: 128.28 GB
+</code></pre>
+<ul>
+<li><strong>AR-10.2</strong> Free space: for the external-storage provider
+  (<code>com.android.externalstorage.documents</code>) the volume is the part of the output folder's
+  document ID before <code>:</code>; free bytes = <code>StatFs(&lt;path&gt;).availableBytes</code> with path =
+  <code>Environment.getExternalStorageDirectory()</code> for <code>primary</code>, else <code>/storage/&lt;volume&gt;</code>. If
+  unknown, the line is omitted. (The provider's roots table is not usable: it needs a
+  system permission.)</li>
+<li><strong>AR-10.3</strong> If summed expected size &gt; free space, the plan text starts with
+  <code>NOT ENOUGH SPACE: needs about &lt;x&gt;, only &lt;y&gt; free in the output folder. Free up space or
+  choose another output folder.</code> The Merge button is still offered (the user decides).</li>
+<li><strong>AR-10.4</strong> A plan with zero parts → state <em>Error</em>, status <code>Nothing to merge</code>.</li>
+</ul>
+<h3 id="311-write-safety-fr-8">3.11 Write safety (FR-8)</h3>
+<ul>
+<li><strong>AR-11.1</strong> One class, <code>OutputFolder</code>, is the <strong>only</strong> code that creates, writes or
+  renames files. It has <strong>no delete method</strong>; nothing in the app deletes files.</li>
+<li><strong>AR-11.2</strong> It creates files only as direct children of the output folder; names
+  containing <code>/</code> are refused; creating a name that already exists is refused; if the
+  provider silently changes the name (e.g. adds <code>(1)</code>), it is reported as an error.</li>
+<li><strong>AR-11.3</strong> It renames only documents it created during this run (tracked set of URIs).
+  The one exception is <code>merge_report.txt</code>, which may be an existing file it opens with
+  mode <code>"wt"</code> (truncate) to replace.</li>
+<li><strong>AR-11.4</strong> Source clips are only ever opened for reading (<code>MediaExtractor</code>, queries).</li>
+</ul>
+<h3 id="312-options-persisted">3.12 Options (persisted)</h3>
+<table>
+<thead>
+<tr>
+<th>Switch label</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Start a new file after a trip gap (&gt; 30 min)</code></td>
+<td>off</td>
+<td>AR-6.1 rule 2</td>
+</tr>
+<tr>
+<td><code>Split at 3.9 GB (FAT32 SD card / USB stick)</code></td>
+<td>off</td>
+<td>AR-6.1 rule 3, 3.9 GiB limit (FAT32 cannot hold files ≥ 4 GiB)</td>
+</tr>
+</tbody>
+</table>
+<p>Fixed values: output subfolder <code>merged</code>, gap warning 300 s, gap split 1800 s, match
+threshold 90 %, default clip length 60 s.</p>
+<hr />
+<h2 id="4-user-interface">4. User interface</h2>
+<p>Single activity, Jetpack Compose, Material 3; light/dark colour scheme follows the system;
+edge-to-edge with safe-drawing padding; 16 dp outer padding, 12 dp vertical spacing. The
+screen keeps itself on while scanning or merging.</p>
+<h3 id="41-layout-top-to-bottom">4.1 Layout (top to bottom)</h3>
+<ol>
+<li>Title <strong>DashCam Merger</strong> (headlineSmall, bold) and the line <em>"Joins dashcam clips per
+   camera into one video, without re-encoding. Source files are never changed or
+   deleted."</em></li>
+<li><strong>Card</strong>:</li>
+<li>label <em>Input (dashcam clips)</em>; folder text (AR-1.5) or <em>No folder chosen</em>;
+     button <em>Choose dashcam folder</em> / <em>Change input folder</em>;</li>
+<li>label <em>Output (merged videos)</em>; folder text or <em>Same as input, in a "merged"
+     subfolder</em>; buttons <em>Choose output folder</em> and (only when one is set) <em>Use default</em>;</li>
+<li>the two option switches (§3.12).</li>
+<li>Button row: <strong>Scan &amp; plan</strong> (enabled when an input folder is set and not busy), plus
+   <strong>Merge</strong> (state <em>Planned</em>) or <strong>Cancel</strong> (shown while <em>Scanning</em>/<em>Merging</em>, enabled only
+   while <em>Merging</em>).</li>
+<li>Status line (bodyMedium, medium weight) and, while busy, a linear progress bar.</li>
+<li>Either the <strong>camera-mapping</strong> list (state <em>NeedCameraMap</em>) or a card filling the rest of
+   the screen with the plan/report/error text in monospace 11 sp (line height 15 sp),
+   scrollable vertically and horizontally.</li>
+</ol>
+<p>All folder buttons and switches are disabled while busy.</p>
+<h3 id="42-camera-mapping-list-ar-34">4.2 Camera-mapping list (AR-3.4)</h3>
+<p>One card per token: <code>&lt;token&gt;  (&lt;n&gt; files, e.g. &lt;first file name&gt;)</code> and four filter chips
+<em>Front</em>, <em>Rear</em>, <em>Interior</em>, <em>Skip</em> (single choice per token). Button <strong>Apply and plan</strong>
+(enabled once at least one token is assigned) runs planning.</p>
+<h3 id="43-state-machine">4.3 State machine</h3>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Entered by</th>
+<th>Status text</th>
+<th>Buttons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle</td>
+<td>start, folder change</td>
+<td>—</td>
+<td>Scan &amp; plan</td>
+</tr>
+<tr>
+<td>Scanning</td>
+<td>Scan &amp; plan / Apply and plan</td>
+<td><code>Scanning folder…</code>, <code>Found &lt;n&gt; clips (&lt;profile&gt; naming). Reading streams…</code>, <code>Reading &lt;Camera&gt; clips… d / t</code></td>
+<td>Scan &amp; plan (disabled), Cancel (disabled)</td>
+</tr>
+<tr>
+<td>NeedCameraMap</td>
+<td>no profile ≥ 90 %</td>
+<td><code>Camera naming not recognised - please assign each group</code></td>
+<td>Scan &amp; plan, mapping list</td>
+</tr>
+<tr>
+<td>Planned</td>
+<td>plan with ≥ 1 part</td>
+<td><code>Plan ready - review it, then tap Merge</code></td>
+<td>Scan &amp; plan, <strong>Merge</strong></td>
+</tr>
+<tr>
+<td>Merging</td>
+<td>Merge</td>
+<td><code>Part i/n: &lt;name&gt;</code> / <code>Cancelling…</code></td>
+<td>Cancel</td>
+</tr>
+<tr>
+<td>Done</td>
+<td>run finished</td>
+<td><code>Done - all &lt;n&gt; part(s) verified</code> / <code>Finished with problems - &lt;p&gt; of &lt;n&gt; part(s) passed</code> / <code>Cancelled - &lt;p&gt; of &lt;n&gt; part(s) finished</code></td>
+<td>Scan &amp; plan</td>
+</tr>
+<tr>
+<td>Error</td>
+<td>exception, no clips, nothing to merge</td>
+<td><code>Error</code> / <code>No video files found</code> / <code>Nothing to merge</code></td>
+<td>Scan &amp; plan</td>
+</tr>
+</tbody>
+</table>
+<p>A plan is used for one merge only; after <em>Done</em> the user rescans (existing outputs then
+get <code>_2</code> names, AR-6.4).</p>
+<h3 id="44-preferences">4.4 Preferences</h3>
+<p><code>SharedPreferences</code> file <code>dashcam_merger</code>: <code>tree_uri</code> (input), <code>output_tree_uri</code>
+(output), <code>split_on_gap</code> (bool), <code>split_fat32</code> (bool).</p>
+<hr />
+<h2 id="5-architecture">5. Architecture</h2>
+<h3 id="51-source-layout">5.1 Source layout</h3>
+<pre><code>Android_app_Ver/
+  settings.gradle.kts, build.gradle.kts, gradle.properties, gradle/libs.versions.toml,
+  gradle/wrapper/*, gradlew(.bat), README.md, this specification (.md + .html)
+  app/build.gradle.kts
+  app/src/main/AndroidManifest.xml
+  app/src/main/res/values/{strings.xml, themes.xml}
+  app/src/main/res/drawable/{ic_launcher_background.xml, ic_launcher_foreground.xml}
+  app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+  app/src/main/java/com/phong/dashcammerger/
+    core/      (pure Kotlin, no android.* imports, JVM unit-tested)
+      Models.kt    data classes and enums
+      Cameras.kt   profiles, detect, manual map, grouping
+      Ordering.kt  timestamp/sequence parsing, sort, gaps
+      Planner.kt   probe orchestration, split, naming, uniqueName
+      Report.kt    plan summary, report text, formatters
+    android/
+      SafStorage.kt   SafScanner (scan, describe, stat) + OutputFolder (write guard)
+      MediaProbe.kt   track selection, probe, output duration
+      Merger.kt       stream-copy + verify + keep-incomplete
+      MergeSession.kt orchestrator / state holder
+      MainActivity.kt Compose UI
+  app/src/test/java/com/phong/dashcammerger/core/CoreTest.kt
+</code></pre>
+<h3 id="52-data-model-coremodelskt">5.2 Data model (<code>core/Models.kt</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enum Camera</code></td>
+<td>Front, Rear, Interior, Skip, Unclassified (<code>CAMERA_ORDER</code> = Front, Rear, Interior)</td>
+</tr>
+<tr>
+<td><code>StreamSignature</code> (data)</td>
+<td><code>video: String</code>, <code>audio: String</code></td>
+</tr>
+<tr>
+<td><code>ProbeInfo</code></td>
+<td><code>durationUs: Long</code>, <code>signature</code>, <code>description: String</code>, <code>audioDropped: String?</code></td>
+</tr>
+<tr>
+<td><code>ClipInfo</code></td>
+<td><code>uri: String</code>, <code>name</code>, <code>parentName</code>, <code>sizeBytes</code>, <code>mtimeMs</code>; mutable <code>camera</code>, <code>cameraToken</code>, <code>timestamp: LocalDateTime?</code>, <code>sequence: Long?</code>, <code>probe: ProbeInfo?</code>, <code>unreadableReason: String?</code>; derived <code>unreadable</code>, <code>stem</code></td>
+</tr>
+<tr>
+<td><code>enum OrderSource</code></td>
+<td>Timestamp, Sequence, Mtime</td>
+</tr>
+<tr>
+<td><code>Gap</code></td>
+<td><code>before</code>, <code>after</code>, <code>seconds: Double</code></td>
+</tr>
+<tr>
+<td><code>CameraGroup</code></td>
+<td><code>camera</code>, <code>clips: MutableList</code>, <code>orderSource</code>, <code>gaps</code></td>
+</tr>
+<tr>
+<td><code>OutputPart</code></td>
+<td><code>camera</code>, <code>partIndex</code>, <code>partCount</code>, <code>clips</code>, <code>splitReason</code>, <code>expectedDurationUs</code>, <code>expectedSize</code>, mutable <code>outputName</code>; derived <code>partialName</code></td>
+</tr>
+<tr>
+<td><code>PlanOptions</code> (data)</td>
+<td><code>outputSubfolder="merged"</code>, <code>gapWarningSeconds=300</code>, <code>gapSplitSeconds=1800</code>, <code>splitOnGap=false</code>, <code>maxPartGb=0.0</code></td>
+</tr>
+<tr>
+<td><code>MergePlan</code></td>
+<td><code>groups</code>, <code>parts</code>, <code>unclassified</code>, <code>unreadable</code>, <code>warnings</code></td>
+</tr>
+<tr>
+<td><code>enum PartStatus</code></td>
+<td>PASS, FAIL, CANCELLED</td>
+</tr>
+<tr>
+<td><code>PartResult</code></td>
+<td><code>part</code>, <code>status</code>, <code>finalName?</code>, <code>actualDurationUs</code>, <code>actualSize</code>, <code>reason</code>, <code>elapsedMs</code></td>
+</tr>
+<tr>
+<td><code>RunReport</code></td>
+<td><code>plan</code>, <code>results</code>, <code>outputFolder</code>, <code>sourcesUntouched</code>, <code>sourceProblems</code></td>
+</tr>
+<tr>
+<td>const</td>
+<td><code>INCOMPLETE_PREFIX = "INCOMPLETE_DO_NOT_USE_"</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>core</code> receives Android-specific operations as function parameters, so it can be tested
+on the JVM: <code>Planner.buildPlan(clips, options, probe: (ClipInfo)-&gt;Unit,
+nameExists: (String)-&gt;Boolean, onProgress: (String, Int, Int)-&gt;Unit)</code>.</p>
+<h3 id="53-pipeline-mergesession">5.3 Pipeline (<code>MergeSession</code>)</h3>
+<p>Mirrors desktop <code>pipeline.run()</code>:</p>
+<ol>
+<li><strong>Scan</strong> (background thread): open output folder → scan input (skip output folder) →
+   <code>Cameras.detect</code> → if no profile: <em>NeedCameraMap</em> and stop.</li>
+<li><strong>Plan</strong>: <code>Planner.buildPlan</code> (group → annotate → order → probe all → drop unreadable →
+   gaps → split → name) → free-space check → plan text → <em>Planned</em>.</li>
+<li><strong>Confirm</strong>: the user reads the plan and taps <strong>Merge</strong> (the explicit FR-2.4 step).</li>
+<li><strong>Merge</strong> (background thread): for each part <code>Merger.mergePart</code> (write partial → verify
+   → rename) → source check → write report → <em>Done</em>.</li>
+</ol>
+<p><code>MergeSession</code> is a process-level singleton holding Compose <code>mutableStateOf</code> fields, so a
+configuration change does not lose a running merge (the activity additionally declares
+<code>configChanges="orientation|screenSize|screenLayout|keyboardHidden"</code>). Worker threads post
+all UI-state changes to the main looper. Cancellation is an <code>AtomicBoolean</code>.</p>
+<h3 id="54-manifest">5.4 Manifest</h3>
+<p>One <code>activity</code> <code>.android.MainActivity</code>, <code>exported="true"</code>, MAIN/LAUNCHER intent filter;
+<code>application</code> with <code>allowBackup="false"</code>, label <code>DashCam Merger</code>, icon
+<code>@mipmap/ic_launcher</code>, theme <code>Theme.DashCamMerger</code> (parent
+<code>android:Theme.Material.NoActionBar</code>). No <code>uses-permission</code> entries.</p>
+<h3 id="55-launcher-icon">5.5 Launcher icon</h3>
+<p>Adaptive icon: background solid <code>#1F3A5F</code>; foreground vector (108×108 viewport) — white
+rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16h-12z</code>,
+<code>M48,46h12v16h-12z</code>, <code>M64,46h12v16h-12z</code> (<code>#1F3A5F</code>), and an amber bar
+<code>M30,72h48v4h-48z</code> (<code>#F2B233</code>): three film frames joined into one strip.</p>
+<hr />
+<h2 id="6-differences-from-the-desktop-version-summary">6. Differences from the desktop version (summary)</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Desktop</th>
+<th>Android</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Join engine</td>
+<td>ffmpeg concat demuxer <code>-c copy</code></td>
+<td><code>MediaExtractor</code> → <code>MediaMuxer</code> sample copy</td>
+</tr>
+<tr>
+<td>Probe</td>
+<td>ffprobe</td>
+<td><code>MediaExtractor</code> formats</td>
+</tr>
+<tr>
+<td>Output container</td>
+<td>MP4</td>
+<td>MP4</td>
+</tr>
+<tr>
+<td>Input extensions</td>
+<td>mp4 mov avi ts mkv</td>
+<td>mp4 mov ts mkv 3gp</td>
+</tr>
+<tr>
+<td>Codecs</td>
+<td>anything ffmpeg can copy</td>
+<td>video H.264/H.265/MPEG-4/H.263; audio AAC/AMR (other audio dropped with warning)</td>
+</tr>
+<tr>
+<td>Signature</td>
+<td>codec parameters</td>
+<td>codec parameters <strong>plus codec-config hash and rotation</strong></td>
+</tr>
+<tr>
+<td>Output location</td>
+<td><code>--output-dir</code> or <code>&lt;input&gt;\merged</code></td>
+<td>output folder picker or <code>&lt;input&gt;/merged</code></td>
+</tr>
+<tr>
+<td>Write guard</td>
+<td><code>WriteGuard</code> allow-listed roots</td>
+<td><code>OutputFolder</code>: one folder, own files only</td>
+</tr>
+<tr>
+<td>Source deletion (FR-12)</td>
+<td>opt-in</td>
+<td>not available</td>
+</tr>
+<tr>
+<td>Re-encode fallback</td>
+<td>yes (<code>--reencode</code>)</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Logs folder</td>
+<td><code>logs/</code> 30-day rotation</td>
+<td>none (report only)</td>
+</tr>
+<tr>
+<td>Free-space check</td>
+<td>—</td>
+<td>plan warning</td>
+</tr>
+<tr>
+<td>FAT32 split</td>
+<td><code>max_part_gb</code> config</td>
+<td>3.9 GB switch</td>
+</tr>
+<tr>
+<td>Source-unchanged check</td>
+<td>size + mtime</td>
+<td>size</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-error-handling-and-edge-cases">7. Error handling and edge cases</h2>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Folder permission revoked / card removed</td>
+<td>Exception in scan or merge → <em>Error</em> with the exception message; files already finished stay.</td>
+</tr>
+<tr>
+<td>Clip cannot be opened / truncated</td>
+<td>Listed as unreadable, skipped, rest merged (AR-5.7).</td>
+</tr>
+<tr>
+<td>Unsupported audio (e.g. PCM <code>.mov</code>)</td>
+<td>Video-only output, warning.</td>
+</tr>
+<tr>
+<td>Codec/resolution change mid-trip</td>
+<td>New part (<code>codec change</code>).</td>
+</tr>
+<tr>
+<td>Output name exists</td>
+<td><code>_2</code>, <code>_3</code>…</td>
+</tr>
+<tr>
+<td>Leftover <code>&lt;name&gt;.partial.mp4</code> from a crashed run</td>
+<td><code>createFile</code> refuses to overwrite → <em>Error</em> for the run; rename or remove that file manually, then rescan.</td>
+</tr>
+<tr>
+<td>Output larger than 4 GiB on FAT32 target</td>
+<td>Write fails → part FAIL, kept as <code>INCOMPLETE_…</code>; use the 3.9 GB switch.</td>
+</tr>
+<tr>
+<td>Not enough space</td>
+<td>Plan warning; if merged anyway, the write fails → <code>INCOMPLETE_…</code>.</td>
+</tr>
+<tr>
+<td>App closed / killed mid-merge</td>
+<td>Partial file stays as <code>….partial.mp4</code> (no final name, never mistaken for a good file).</td>
+</tr>
+<tr>
+<td>Cancel</td>
+<td>Current part → <code>INCOMPLETE_…</code>; remaining parts not started; report written.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-known-limitations">8. Known limitations</h2>
+<ul>
+<li>Merging runs in the foreground only; leaving the app for long may let Android stop it.</li>
+<li>Throughput is bounded by the SD card / USB reader (observed ≈ 0.5 GB per minute for
+  SD → phone on the Note 10: 9.4 GB in about 15 minutes).</li>
+<li>B-frame streams are copied in decode order with their original timestamps; typical
+  dashcam streams (no B-frames / fixed GOP) are the tested case.</li>
+<li>The audio track may start a few milliseconds offset at clip joins (per-clip rebase uses
+  the earliest sample of the clip); not audible in tests.</li>
+<li>Only the external-storage provider reports free space.</li>
+</ul>
+<hr />
+<h2 id="9-verification">9. Verification</h2>
+<h3 id="91-unit-tests-coretest-jvm-all-passing">9.1 Unit tests (<code>CoreTest</code>, JVM, all passing)</h3>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>xforceProfileDetectsCamerasAndTimestamps</code></td>
+<td>Xforce profile wins; F/R labels; timestamp and sequence from the name</td>
+</tr>
+<tr>
+<td><code>folderProfileUsesParentName</code></td>
+<td>Folder profile; <code>Front</code>/<code>rear</code>/<code>Inside</code> folders</td>
+</tr>
+<tr>
+<td><code>unknownNamingFallsBackToTokens</code></td>
+<td><code>VID0001.mp4</code> → no profile, token <code>ALL</code>; manual map applies</td>
+</tr>
+<tr>
+<td><code>timestampAndSequenceParsing</code></td>
+<td>separated timestamp form; invalid month rejected; sequence excludes timestamp digits</td>
+</tr>
+<tr>
+<td><code>ordersByTimestampAndDetectsGaps</code></td>
+<td>sort order; 12:01→13:00 with 60 s clip = 58 min gap</td>
+</tr>
+<tr>
+<td><code>planSplitsOnCodecChangeAndNamesOutputs</code></td>
+<td>codec change split; <code>_part1</code>/<code>_part2</code> names; collision → <code>_2</code>; expected duration</td>
+</tr>
+<tr>
+<td><code>unreadableClipsAreSkippedWithWarning</code></td>
+<td>unreadable clip removed, one part remains</td>
+</tr>
+<tr>
+<td><code>maxPartSizeSplits</code></td>
+<td>4 × 1 GiB with 2.5 GB limit → parts of 2 + 2</td>
+</tr>
+<tr>
+<td><code>formatting</code></td>
+<td><code>1:01:05</code>, <code>1.50 GB</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="92-device-acceptance-tests-note-10-2026-09-27">9.2 Device acceptance tests (Note 10, 2026-09-27)</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Procedure</th>
+<th>Expected</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DT-1</td>
+<td>6 synthetic clips (ffmpeg <code>testsrc2</code> 1280×720 30 fps H.264 + AAC, 10 s, Xforce names, 3 F + 3 R) in <code>Phone:/DashTest</code>; output <code>Phone:/Movies/DashMerged</code>; Scan &amp; plan</td>
+<td>Plan: 2 parts, 3 clips each, 0:00:30, H.264 1280x720 + AAC, free space shown</td>
+<td>Pass</td>
+</tr>
+<tr>
+<td>DT-2</td>
+<td>Merge DT-1</td>
+<td>2 outputs PASS, report written, sources unchanged</td>
+<td>Pass; ffprobe: 900 video frames (= 3 × 300), 1296 AAC frames, 30.1 s; ffmpeg full decode: 0 errors</td>
+</tr>
+<tr>
+<td>DT-3</td>
+<td>Rescan DT-1 with outputs present</td>
+<td>Names get <code>_2</code></td>
+<td>Pass</td>
+</tr>
+<tr>
+<td>DT-4</td>
+<td>Real Vietmap M1 card (<code>SD card/USB (1721-8D53): /Vietmap_M1/Movie</code>, 1920×1080 H.264 High + AAC, 1-min clips), trip-gap switch on, output to phone</td>
+<td>4 parts (Front/Rear × 2 trips, split at a 494.6 min gap), all PASS</td>
+<td>Pass (sizes 1.6–2.9 GB)</td>
+</tr>
+<tr>
+<td>DT-5</td>
+<td>Pull <code>Rear_20260924070830_to_20260924073130_part1.mp4</code> (1.7 GB, 24 clips) to PC; ffmpeg full decode; frames at 58/60/62/600/1200 s</td>
+<td>No decode errors, clean image across clip joins</td>
+<td>Pass: 41 596 frames, 1386.5 s, 0 errors</td>
+</tr>
+</tbody>
+</table>
+<p>Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
+design; colourful output from those clips is not a defect.</p>
+<h3 id="93-re-running-the-acceptance-test">9.3 Re-running the acceptance test</h3>
+<pre><code>ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=30:duration=10 ^
+       -f lavfi -i sine=frequency=440:duration=10 ^
+       -c:v libx264 -preset veryfast -g 30 -c:a aac -shortest 20260927120000_0001F.mp4
+(repeat for 120100_0002F, 120200_0003F and the R variants)
+adb push &lt;folder&gt;\. /sdcard/DashTest/
+</code></pre>
+<p>Then run DT-1…DT-3 and check the outputs with
+<code>ffprobe -count_frames -show_entries stream=codec_name,nb_read_frames,duration</code> and
+<code>ffmpeg -v error -i &lt;out&gt; -f null -</code> (must print nothing).</p>
+<hr />
+<h2 id="10-rebuild-checklist">10. Rebuild checklist</h2>
+<ol>
+<li>Create an Android project with the toolchain in §2.2 (Compose, Material 3, single
+   module <code>:app</code>, package <code>com.phong.dashcammerger</code>, min 28 / target 36).</li>
+<li>Implement <code>core/</code> from §3.3–3.6, §3.9–3.10 and §5.2 in pure Kotlin; port the unit tests
+   in §9.1 first and make them pass.</li>
+<li>Implement <code>SafScanner</code> and <code>OutputFolder</code> (§3.1–3.2, §3.11, AR-10.2) with
+   <code>DocumentsContract</code> only (no <code>DocumentFile</code> dependency needed).</li>
+<li>Implement <code>MediaProbe</code> (§3.5) and <code>Merger</code> (§3.7–3.8) exactly as specified —
+   especially the signature including codec config, the timestamp rebase, and the
+   partial → verify → rename / keep-incomplete flow.</li>
+<li>Implement <code>MergeSession</code> (§5.3) and the UI (§4).</li>
+<li>Manifest and icon per §5.4–5.5; no permissions.</li>
+<li>Run §9.1, then the device tests §9.2.</li>
+</ol></main></div></body></html>

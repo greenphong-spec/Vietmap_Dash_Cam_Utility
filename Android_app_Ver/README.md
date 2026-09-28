@@ -9,6 +9,10 @@ Output goes to a `merged/` subfolder of the input folder by default, or to any f
 you choose — e.g. merge from the SD card and save to the phone's `Movies/`. Source clips are never moved, renamed or
 deleted.
 
+Full rebuild reference: [`DashCamMerger-Android-Specification.md`](DashCamMerger-Android-Specification.md)
+(browsable `DashCamMerger-Android-Specification.html`; regenerate with `python tools\gen_docs.py`
+from the repo root after editing the `.md`).
+
 ## How it differs from the desktop version
 
 | Desktop (Python) | Android |

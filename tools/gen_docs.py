@@ -1,4 +1,4 @@
-"""Regenerate DashCamMerger-{Specification,Design}.html from their .md sources.
+"""Regenerate DashCamMerger-{Specification,Design}.html (and the Android app spec) from .md.
 
 The .md files are the source of truth; the .html files are a browsable,
 sidebar-navigable render of them for people who don't want to read raw
@@ -112,3 +112,6 @@ if __name__ == "__main__":
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
     build(root / "DashCamMerger-Specification.md", root / "DashCamMerger-Specification.html")
     build(root / "DashCamMerger-Design.md", root / "DashCamMerger-Design.html")
+    android_spec = root / "Android_app_Ver" / "DashCamMerger-Android-Specification.md"
+    if android_spec.exists():
+        build(android_spec, android_spec.with_suffix(".html"))
