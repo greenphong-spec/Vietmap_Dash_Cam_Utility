@@ -1,0 +1,26 @@
+[versions]
+agp = "8.13.2"
+kotlin = "2.4.10"
+composeBom = "2026.06.01"
+# Pinned to the newest versions that still build against AGP 8.13.2 / compileSdk 36.
+# Verified from each AAR's aar-metadata.properties:
+#   core-ktx 1.19.0            -> needs compileSdk 37 + AGP 9.1  (too new)
+#   activity-compose 1.13.0    -> needs compileSdk 37            (too new)
+#   lifecycle 2.11.0           -> needs compileSdk 37            (too new)
+coreKtx = "1.18.0"
+activityCompose = "1.12.0"
+lifecycleRuntimeKtx = "2.10.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
