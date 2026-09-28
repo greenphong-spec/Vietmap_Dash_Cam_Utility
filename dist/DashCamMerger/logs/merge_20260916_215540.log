@@ -1,0 +1,5 @@
+2026-09-16 21:55:40,980 INFO    dashcam_merger.pipeline: Run 20260916_215540: input=D:\TienGiang_SaiGon_12-13.Sep.2026\Sep_13,_2026_11_26_19\rear output=D:\TienGiang_SaiGon_12-13.Sep.2026\Sep_13,_2026_11_26_19\rear\merged
+2026-09-16 21:55:41,022 INFO    dashcam_merger.scanner: Scanned 9 video files in D:\TienGiang_SaiGon_12-13.Sep.2026\Sep_13,_2026_11_26_19\rear
+2026-09-16 21:55:41,022 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
+2026-09-16 21:55:41,024 INFO    dashcam_merger.ordering: Rear: 9 clips ordered by timestamp
+2026-09-16 21:55:42,658 INFO    dashcam_merger.planner: Plan: 1 group(s), 1 part(s)
