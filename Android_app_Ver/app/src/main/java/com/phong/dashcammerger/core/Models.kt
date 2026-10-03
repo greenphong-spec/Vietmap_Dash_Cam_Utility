@@ -104,6 +104,8 @@ class RunReport(
     val outputFolder: String,
     val sourcesUntouched: Boolean,
     val sourceProblems: List<String>,
+    /** Planned parts the user unticked before merging (AR-10.12); nothing was written for them. */
+    val skipped: List<OutputPart> = emptyList(),
 )
 
 const val INCOMPLETE_PREFIX = "INCOMPLETE_DO_NOT_USE_"

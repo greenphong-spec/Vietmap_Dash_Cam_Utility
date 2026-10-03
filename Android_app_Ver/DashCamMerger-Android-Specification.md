@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Document version | 1.0 — 2026-09-27 |
-| App version | `1.0-android` (versionCode 1), package `com.phong.dashcammerger` |
+| Document version | 1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use `yyyyMMdd_HHmmss`, AR-6.3) |
+| App version | `1.4-android` (versionCode 5), package `com.phong.dashcammerger` |
 | Status | Built, installed and verified on a Samsung Galaxy Note 10 (SM-N970F, Android 12) |
 | Source location | `Android_app_Ver/` in the DashCam Merger repository (commit `51ae98e`, later updates follow) |
 | Parent documents | `../DashCamMerger-Specification.md` (desktop FR-1…FR-12), `../DashCamMerger-Design.md` |
@@ -257,8 +257,8 @@ Regular expressions (Java syntax, compiled with `Pattern.CASE_INSENSITIVE`, appl
 - **AR-6.3** Output name (FR-6.3):
   `<Camera>_<first>_to_<last>.mp4`, with `_part<n>` appended to the stem when the camera
   has more than one part. `<first>`/`<last>` are the first/last clip's timestamp as
-  `yyyyMMddHHmmss`, or the clip's file stem if it has no timestamp.
-  Example: `Front_20260924070830_to_20260924073130_part1.mp4`.
+  `yyyyMMdd_HHmmss` (date and time separated by `_`, since v1.4), or the clip's file stem if it has no timestamp.
+  Example: `Front_20260924_070830_to_20260924_073130_part1.mp4`.
 - **AR-6.4** Collisions (FR-6.2): if the name exists in the output folder, or was already
   given to another part in this plan, try `<stem>_2.mp4`, `<stem>_3.mp4`, … until free.
   Existing files are never overwritten.
@@ -318,9 +318,9 @@ Regular expressions (Java syntax, compiled with `Pattern.CASE_INSENSITIVE`, appl
   every merge run (replacing an earlier report there). Format:
 
 ```
-Front part 1: Front_20260924070830_to_20260924073130_part1.mp4
+Front part 1: Front_20260924_070830_to_20260924_073130_part1.mp4
     24 files, 0:23:07, 2.33 GB  ->  PASS
-Rear part 1: Rear_20260924070830_to_20260924073130_part1.mp4
+Rear part 1: Rear_20260924_070830_to_20260924_073130_part1.mp4
     24 files, 0:23:07, 1.60 GB  ->  PASS
 Unclassified: 0   Skipped unreadable: 0   Sources untouched: OK
 Output folder: Phone: /Movies/DashMerged
@@ -332,6 +332,9 @@ Warnings:
 
   For non-PASS parts the status is followed by ` (<reason>)` and the file name is the
   `INCOMPLETE_…` name. A `Source problems:` section appears when AR-8.4 found any.
+  When the user unticked parts (AR-10.12), the per-part lines are followed by
+  `Not selected (skipped by user): <m>` and one line per skipped output name, indented
+  4 spaces.
 - **AR-9.2** Formats: duration `H:MM:SS` (rounded seconds); size `x.xx GB` (≥ 1 GiB),
   `x.x MB` (≥ 1 MiB) else `x.x KB`, 1024-based, `.` decimal separator.
 - **AR-9.3** The same text is shown on screen when the run finishes.
@@ -346,8 +349,8 @@ Rear: 3 files, 10.6 MB  [H.264 1280x720 + AAC]
 Unclassified: 0
 Unreadable: 0
 Parts to write: 2
-  Front_20260927120000_to_20260927120200.mp4  (3 clips, 0:00:30, 10.6 MB)
-  Rear_20260927120000_to_20260927120200.mp4  (3 clips, 0:00:30, 10.6 MB)
+  Front_20260927_120000_to_20260927_120200.mp4  (3 clips, 0:00:30, 10.6 MB)
+  Rear_20260927_120000_to_20260927_120200.mp4  (3 clips, 0:00:30, 10.6 MB)
 Output folder: Phone: /Movies/DashMerged
 Warnings:
   …
@@ -360,10 +363,66 @@ Free space there: 128.28 GB
   `Environment.getExternalStorageDirectory()` for `primary`, else `/storage/<volume>`. If
   unknown, the line is omitted. (The provider's roots table is not usable: it needs a
   system permission.)
-- **AR-10.3** If summed expected size > free space, the plan text starts with
+- **AR-10.3** If the summed expected size of the **selected** parts (AR-10.9) > free
+  space, the selection card shows (in the error colour)
   `NOT ENOUGH SPACE: needs about <x>, only <y> free in the output folder. Free up space or
   choose another output folder.` The Merge button is still offered (the user decides).
 - **AR-10.4** A plan with zero parts → state *Error*, status `Nothing to merge`.
+
+#### Choosing which files to export (v1.1)
+
+- **AR-10.5 Selection list.** In state *Planned*, above the plan text, a card *Files to
+  export* lists one row per planned output part: checkbox, output file name,
+  `<n> clips, H:MM:SS, <size>`, and ▲ / ▼ buttons (AR-10.17). The rows are one flat list
+  in export order (AR-10.14). Above them is one tri-state box per camera present, shown as
+  `<Camera> (<ticked>/<n>)`, in `CAMERA_ORDER`.
+- **AR-10.6 Default.** Right after a successful plan every part is ticked, so tapping
+  Merge immediately behaves exactly like v1.0.
+- **AR-10.7 Bulk controls.** Buttons **Select all** (disabled when all are ticked) and
+  **Select none** (disabled when none are ticked). Each camera header has a tri-state
+  checkbox (on / off / some); tapping it ticks all of that camera's parts, or unticks
+  them all when they were all ticked.
+- **AR-10.8 Summary and Merge gating.** A line `Selected: <k> of <n> file(s), <size>`
+  (size = sum of the selected parts' expected sizes) updates live. **Merge** is enabled
+  only when k ≥ 1. Status text in *Planned*: `Plan ready - choose files, then tap Merge`.
+- **AR-10.9 Free space on the selection.** AR-10.3 is evaluated on the selected parts
+  and updates as the selection changes. The plan text keeps the `Free space there:` line.
+- **AR-10.10 Merge only the selection.** Merge processes only the ticked parts, in plan
+  order. Progress, the `Part i/k` labels and the Done/Cancelled/Finished status counts use
+  k = number of ticked parts. The source-unchanged check (FR-7.6) covers the clips of
+  the ticked parts.
+- **AR-10.11 Stable names.** Output names are the ones computed at plan time (AR-6.3,
+  AR-6.4) and are not recomputed when parts are unticked. For example, `_part2` may be
+  written without `_part1`. Unticked parts write nothing.
+- **AR-10.12 Report.** See AR-9.1: skipped parts are listed under
+  `Not selected (skipped by user):`.
+- **AR-10.13 Lifetime.** The selection is held in `MergeSession`, so it survives a
+  screen rotation. Every new plan resets it to "all ticked". It is cleared by
+  `Scan & plan`, a folder change and `reset()`. Edits are ignored outside *Planned*.
+
+#### Export order and Front/Rear pairing (v1.2)
+
+- **AR-10.14 Export order.** `MergeSession.order` is a permutation of the plan's part
+  indices. The list shows parts in this order, and Merge writes the ticked ones in this
+  order (the report lists results in the same order, then the skipped ones). It is
+  rebuilt from the current sort mode on every new plan.
+- **AR-10.15 Sort mode.** Chips **Order: By camera | By time** (preference
+  `order_by_time`, default *By camera*). Choosing one re-sorts the list immediately and
+  drops manual moves.
+  - *By camera* = plan order: Front parts, then Rear, then Interior, each in time order.
+  - *By time* = by part start (first clip's timestamp); same start → `CAMERA_ORDER`, so
+    the Front and Rear file of one trip sit together (Front 1, Rear 1, Front 2, Rear 2).
+    Parts without a timestamp go last, by part number then camera.
+- **AR-10.16 Keep Front/Rear pairs together.** Switch *Keep Front/Rear pairs together
+  (same time)* (preference `link_pairs`, default off). Two parts of **different** cameras
+  are partners when their time ranges overlap: range = [first clip timestamp, last clip
+  timestamp + last clip duration (60 s if unknown)). When neither part has a timestamp,
+  parts with the same part number are partners; a part with a timestamp is never paired
+  with one without. With the switch on, ticking or unticking a row applies the same
+  state to its partners. *Select all*, *Select none* and the camera boxes are not
+  affected by the switch.
+- **AR-10.17 Manual order.** ▲ swaps a row with the one above and ▼ with the one below
+  (disabled on the first and last row respectively).
 
 ### 3.11 Write safety (FR-8)
 
@@ -395,24 +454,37 @@ Single activity, Jetpack Compose, Material 3; light/dark colour scheme follows t
 edge-to-edge with safe-drawing padding; 16 dp outer padding, 12 dp vertical spacing. The
 screen keeps itself on while scanning or merging.
 
-### 4.1 Layout (top to bottom)
+### 4.1 Layout (top to bottom, v1.3 tabbed)
 
-1. Title **DashCam Merger** (headlineSmall, bold) and the line *"Joins dashcam clips per
-   camera into one video, without re-encoding. Source files are never changed or
-   deleted."*
-2. **Card**:
-   - label *Input (dashcam clips)*; folder text (AR-1.5) or *No folder chosen*;
-     button *Choose dashcam folder* / *Change input folder*;
-   - label *Output (merged videos)*; folder text or *Same as input, in a "merged"
-     subfolder*; buttons *Choose output folder* and (only when one is set) *Use default*;
-   - the two option switches (§3.12).
-3. Button row: **Scan & plan** (enabled when an input folder is set and not busy), plus
-   **Merge** (state *Planned*) or **Cancel** (shown while *Scanning*/*Merging*, enabled only
-   while *Merging*).
-4. Status line (bodyMedium, medium weight) and, while busy, a linear progress bar.
-5. Either the **camera-mapping** list (state *NeedCameraMap*) or a card filling the rest of
-   the screen with the plan/report/error text in monospace 11 sp (line height 15 sp),
-   scrollable vertically and horizontally.
+1. Title **DashCam Merger** (titleLarge, bold). Outer padding 16 dp horizontal, 8 dp
+   vertical; 8 dp spacing.
+2. **AR-12.1** Tab row **Setup | Files | Details**. The selected tab's content fills all
+   space between the tab row and the bottom bar (item 4), so each can be used full screen.
+   The Files tab label is `Files <ticked>/<n>` (one line) once a plan exists. The selected tab
+   survives rotation (`rememberSaveable`).
+3. Tab content:
+   - **Setup**: the line *"Joins dashcam clips per camera into one video, without
+     re-encoding. Source files are never changed or deleted."* and a **Card** with
+     label *Input (dashcam clips)*; folder text (AR-1.5) or *No folder chosen*; button
+     *Choose dashcam folder* / *Change input folder*; label *Output (merged videos)*;
+     folder text or *Same as input, in a "merged" subfolder*; buttons *Choose output
+     folder* and (only when one is set) *Use default*; the two option switches (§3.12).
+     Scrolls vertically. In state *NeedCameraMap* the tab shows the **camera-mapping**
+     list (§4.2) instead.
+   - **Files**: the **Files to export** card (AR-10.5–10.17), scrolling vertically; before
+     any plan: *No plan yet - tap Scan & plan to list the files to export.* While merging
+     and after the run the list stays visible but all its controls are disabled.
+   - **Details**: the plan text (AR-10.1), the merge report (AR-9.1) or the error text, in
+     monospace 11 sp (line height 15 sp), scrolling vertically and horizontally; before
+     anything exists: *The plan, the merge report and any errors appear here.*
+4. **AR-12.2** Bottom bar, always visible whichever tab is open: status line (bodyMedium,
+   medium weight); while busy a linear progress bar; button row **Scan & plan** (enabled
+   when an input folder is set and not busy) plus **Merge <k> file(s)** (state *Planned*,
+   enabled when k ≥ 1) or **Cancel** (shown while *Scanning*/*Merging*, enabled only while
+   *Merging*).
+
+**AR-12.3** The app switches tab when the state changes: *NeedCameraMap* → Setup,
+*Planned* → Files, *Done* / *Error* → Details. The user can switch freely afterwards.
 
 All folder buttons and switches are disabled while busy.
 
@@ -429,8 +501,8 @@ One card per token: `<token>  (<n> files, e.g. <first file name>)` and four filt
 | Idle | start, folder change | — | Scan & plan |
 | Scanning | Scan & plan / Apply and plan | `Scanning folder…`, `Found <n> clips (<profile> naming). Reading streams…`, `Reading <Camera> clips… d / t` | Scan & plan (disabled), Cancel (disabled) |
 | NeedCameraMap | no profile ≥ 90 % | `Camera naming not recognised - please assign each group` | Scan & plan, mapping list |
-| Planned | plan with ≥ 1 part | `Plan ready - review it, then tap Merge` | Scan & plan, **Merge** |
-| Merging | Merge | `Part i/n: <name>` / `Cancelling…` | Cancel |
+| Planned | plan with ≥ 1 part | `Plan ready - choose files, then tap Merge` | Scan & plan, **Merge <k> file(s)** (enabled when ≥ 1 file ticked), Select all / Select none, Order chips, pair switch, checkboxes, ▲ / ▼ |
+| Merging | Merge | `Part i/k: <name>` (k = ticked parts) / `Cancelling…` | Cancel |
 | Done | run finished | `Done - all <n> part(s) verified` / `Finished with problems - <p> of <n> part(s) passed` / `Cancelled - <p> of <n> part(s) finished` | Scan & plan |
 | Error | exception, no clips, nothing to merge | `Error` / `No video files found` / `Nothing to merge` | Scan & plan |
 
@@ -440,7 +512,8 @@ get `_2` names, AR-6.4).
 ### 4.4 Preferences
 
 `SharedPreferences` file `dashcam_merger`: `tree_uri` (input), `output_tree_uri`
-(output), `split_on_gap` (bool), `split_fat32` (bool).
+(output), `split_on_gap` (bool), `split_fat32` (bool), `order_by_time` (bool, AR-10.15),
+`link_pairs` (bool, AR-10.16).
 
 ---
 
@@ -489,7 +562,7 @@ Android_app_Ver/
 | `MergePlan` | `groups`, `parts`, `unclassified`, `unreadable`, `warnings` |
 | `enum PartStatus` | PASS, FAIL, CANCELLED |
 | `PartResult` | `part`, `status`, `finalName?`, `actualDurationUs`, `actualSize`, `reason`, `elapsedMs` |
-| `RunReport` | `plan`, `results`, `outputFolder`, `sourcesUntouched`, `sourceProblems` |
+| `RunReport` | `plan`, `results`, `outputFolder`, `sourcesUntouched`, `sourceProblems`, `skipped: List<OutputPart> = []` (unticked parts, AR-10.12) |
 | const | `INCOMPLETE_PREFIX = "INCOMPLETE_DO_NOT_USE_"` |
 
 `core` receives Android-specific operations as function parameters, so it can be tested
@@ -504,8 +577,12 @@ Mirrors desktop `pipeline.run()`:
    `Cameras.detect` → if no profile: *NeedCameraMap* and stop.
 2. **Plan**: `Planner.buildPlan` (group → annotate → order → probe all → drop unreadable →
    gaps → split → name) → free-space check → plan text → *Planned*.
-3. **Confirm**: the user reads the plan and taps **Merge** (the explicit FR-2.4 step).
-4. **Merge** (background thread): for each part `Merger.mergePart` (write partial → verify
+3. **Confirm & select**: the user reads the plan, ticks the files to export (state
+   `planParts`, `selected` = indices into `plan.parts`, `order`, `orderByTime`,
+   `freeBytes`; edited via `toggle(i, linked)`, `setCamera`, `selectAll`, `selectNone`,
+   `arrange(byTime)`, `move(pos, delta)`; pure helpers in `core/Arrange.kt`) and taps
+   **Merge** (the explicit FR-2.4 step).
+4. **Merge** (background thread): for each **ticked** part, in `order` `Merger.mergePart` (write partial → verify
    → rename) → source check → write report → *Done*.
 
 `MergeSession` is a process-level singleton holding Compose `mutableStateOf` fields, so a
@@ -595,6 +672,10 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | `unreadableClipsAreSkippedWithWarning` | unreadable clip removed, one part remains |
 | `maxPartSizeSplits` | 4 × 1 GiB with 2.5 GB limit → parts of 2 + 2 |
 | `formatting` | `1:01:05`, `1.50 GB` |
+| `reportListsSkippedParts` | report lists `Not selected (skipped by user): 1` and the unticked part's name; no such line when nothing was skipped |
+| `arrangeOrdersByCameraOrTimeAndMoves` | 2 trips × Front/Rear: by camera F1 F2 R1 R2; by time F1 R1 F2 R2; ▲/▼ swaps and ignores moves past either end |
+| `arrangePairsSameTimePartsAcrossCameras` | F1↔R1, F2↔R2 by overlapping time; without timestamps paired by part number |
+| `selectionSummaryAndSpaceWarning` | `Selected: 1 of 2 file(s), 0.3 KB`; space warning only when needed > known free space |
 
 ### 9.2 Device acceptance tests (Note 10, 2026-09-27)
 
@@ -605,6 +686,13 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | DT-3 | Rescan DT-1 with outputs present | Names get `_2` | Pass |
 | DT-4 | Real Vietmap M1 card (`SD card/USB (1721-8D53): /Vietmap_M1/Movie`, 1920×1080 H.264 High + AAC, 1-min clips), trip-gap switch on, output to phone | 4 parts (Front/Rear × 2 trips, split at a 494.6 min gap), all PASS | Pass (sizes 1.6–2.9 GB) |
 | DT-5 | Pull `Rear_20260924070830_to_20260924073130_part1.mp4` (1.7 GB, 24 clips) to PC; ffmpeg full decode; frames at 58/60/62/600/1200 s | No decode errors, clean image across clip joins | Pass: 41 596 frames, 1386.5 s, 0 errors |
+
+| DT-6 | DT-1 clips; Scan & plan → both rows ticked, `Selected: 2 of 2`; Select none → Merge disabled; tick only Rear → Merge | Only the Rear file written, PASS; report shows `Not selected (skipped by user): 1` + Front name; sources unchanged | Not yet run (v1.1) |
+| DT-7 | A plan with ≥ 2 parts per camera (DT-4 card with trip gap, or 3.9 GB split); toggle a camera header; untick `_part1`, rotate the screen, Merge | Header toggles all of that camera's parts; selection survives rotation; only `_part2` written, with its planned name | Not yet run (v1.1) |
+
+| DT-8 | DT-4-style plan (2 trips × Front/Rear); *By time*; pair switch on; untick Front part 2; ▼ on the first row; Merge | List F1 R1 F2 R2; unticking F2 also unticks R2; merge writes R1 then F1; report lists F2/R2 as not selected | Partly run 2026-10-03 on a Vietmap M1 card (14 parts, 7 F + 7 R): By time gave F1 R1 F2 R2 F3 R3…; unticking Front part 2 gave Front 6/7, Rear 6/7, 12/14 — Pass. Merge not run |
+
+| DT-9 | Open app; Scan & plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |
 
 Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
 design; colourful output from those clips is not a defect.
@@ -636,6 +724,7 @@ Then run DT-1…DT-3 and check the outputs with
 4. Implement `MediaProbe` (§3.5) and `Merger` (§3.7–3.8) exactly as specified —
    especially the signature including codec config, the timestamp rebase, and the
    partial → verify → rename / keep-incomplete flow.
-5. Implement `MergeSession` (§5.3) and the UI (§4).
+5. Implement `MergeSession` (§5.3) and the UI (§4), including the export selection
+   (AR-10.5–AR-10.17).
 6. Manifest and icon per §5.4–5.5; no permissions.
 7. Run §9.1, then the device tests §9.2.

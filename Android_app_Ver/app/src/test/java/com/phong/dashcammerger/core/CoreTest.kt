@@ -80,11 +80,11 @@ class CoreTest {
         val plan2 = Planner.buildPlan(
             clips, PlanOptions(),
             probe = { c -> probed(c, if (c.name.contains("0003")) other else sig) },
-            nameExists = { it == "Front_20260101120200_to_20260101120200_part2.mp4" },
+            nameExists = { it == "Front_20260101_120200_to_20260101_120200_part2.mp4" },
         )
         assertEquals(2, plan2.parts.size)
-        assertEquals("Front_20260101120000_to_20260101120100_part1.mp4", plan2.parts[0].outputName)
-        assertEquals("Front_20260101120200_to_20260101120200_part2_2.mp4", plan2.parts[1].outputName)
+        assertEquals("Front_20260101_120000_to_20260101_120100_part1.mp4", plan2.parts[0].outputName)
+        assertEquals("Front_20260101_120200_to_20260101_120200_part2_2.mp4", plan2.parts[1].outputName)
         assertEquals(120_000_000L, plan2.parts[0].expectedDurationUs)
         assertTrue(plan2.warnings.any { "codec change" in it })
     }
@@ -109,6 +109,68 @@ class CoreTest {
         Cameras.detect(clips)
         val plan = Planner.buildPlan(clips, PlanOptions(maxPartGb = 2.5), probe = { probed(it) }, nameExists = { false })
         assertEquals(listOf(2, 2), plan.parts.map { it.clips.size })
+    }
+
+    private fun twoPartPlan(): MergePlan {
+        val clips = listOf(clip("20260101120000_0001F.mp4"), clip("20260101120000_0001R.mp4", size = 300))
+        Cameras.detect(clips)
+        return Planner.buildPlan(clips, PlanOptions(), probe = { probed(it) }, nameExists = { false })
+    }
+
+    @Test
+    fun reportListsSkippedParts() {
+        val plan = twoPartPlan()
+        val (front, rear) = plan.parts
+        val result = PartResult(rear, PartStatus.PASS, rear.outputName, rear.expectedDurationUs, rear.expectedSize, "", 0)
+
+        val text = Report.reportText(RunReport(plan, listOf(result), "out", true, emptyList(), skipped = listOf(front)))
+        assertTrue("Not selected (skipped by user): 1" in text)
+        assertTrue("    ${front.outputName}" in text)
+
+        val all = Report.reportText(RunReport(plan, listOf(result), "out", true, emptyList()))
+        assertTrue("Not selected" !in all)
+    }
+
+    @Test
+    fun selectionSummaryAndSpaceWarning() {
+        val plan = twoPartPlan()
+        assertEquals("Selected: 1 of 2 file(s), 0.3 KB", Report.selectionSummary(plan.parts.drop(1), plan.parts.size))
+        assertEquals("Selected: 0 of 2 file(s), 0.0 KB", Report.selectionSummary(emptyList(), 2))
+        assertTrue(Report.spaceWarning(200, 100).startsWith("NOT ENOUGH SPACE"))
+        assertEquals("", Report.spaceWarning(100, 200))
+        assertEquals("", Report.spaceWarning(100, null))
+    }
+
+    /** Front and Rear, two trips each (12:00-12:02 and 14:00), split on the trip gap. */
+    private fun twoTripPlan(): MergePlan {
+        val clips = listOf("120000_0001", "120100_0002", "140000_0003").flatMap { t ->
+            listOf(clip("20260101${t}F.mp4"), clip("20260101${t}R.mp4"))
+        }
+        Cameras.detect(clips)
+        return Planner.buildPlan(clips, PlanOptions(splitOnGap = true), probe = { probed(it) }, nameExists = { false })
+    }
+
+    @Test
+    fun arrangeOrdersByCameraOrTimeAndMoves() {
+        val parts = twoTripPlan().parts
+        assertEquals(listOf("Front" to 1, "Front" to 2, "Rear" to 1, "Rear" to 2), parts.map { it.camera.name to it.partIndex })
+        assertEquals(listOf(0, 1, 2, 3), Arrange.byCamera(parts))
+        assertEquals(listOf(0, 2, 1, 3), Arrange.byTime(parts))
+        assertEquals(listOf(1, 0, 2, 3), Arrange.move(listOf(0, 1, 2, 3), 1, -1))
+        assertEquals(listOf(0, 1, 2, 3), Arrange.move(listOf(0, 1, 2, 3), 0, -1)) // already first
+        assertEquals(listOf(0, 1, 2, 3), Arrange.move(listOf(0, 1, 2, 3), 3, 1)) // already last
+    }
+
+    @Test
+    fun arrangePairsSameTimePartsAcrossCameras() {
+        val parts = twoTripPlan().parts
+        assertEquals(listOf(setOf(2), setOf(3), setOf(0), setOf(1)), Arrange.partners(parts))
+
+        // Without timestamps, parts pair by part number.
+        val clips = listOf(clip("a.mp4", parent = "Front"), clip("a.mp4", parent = "Rear"))
+        Cameras.detect(clips)
+        val plain = Planner.buildPlan(clips, PlanOptions(), probe = { probed(it) }, nameExists = { false }).parts
+        assertEquals(listOf(setOf(1), setOf(0)), Arrange.partners(plain))
     }
 
     @Test

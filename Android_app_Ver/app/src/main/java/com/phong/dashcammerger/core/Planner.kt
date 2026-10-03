@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object Planner {
     private const val GIB = 1024.0 * 1024.0 * 1024.0
     private const val PROBE_WORKERS = 4
-    private val TS_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+    private val TS_FMT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss") // date_time, easier to read (AR-6.3)
 
     /** FR-6.3: timestamp when known, otherwise the file stem. */
     private fun timestampToken(clip: ClipInfo): String = clip.timestamp?.format(TS_FMT) ?: clip.stem

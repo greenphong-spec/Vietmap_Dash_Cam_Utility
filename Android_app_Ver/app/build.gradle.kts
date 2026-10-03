@@ -15,8 +15,8 @@ android {
         // Samsung Galaxy Note 10 runs Android 12 (API 31); 28 keeps older phones working.
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0-android"
+        versionCode = 5
+        versionName = "1.4-android"
     }
 
     buildTypes {

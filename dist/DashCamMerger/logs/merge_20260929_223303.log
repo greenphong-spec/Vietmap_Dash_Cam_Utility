@@ -1,0 +1,15 @@
+2026-09-29 22:33:03,696 INFO    dashcam_merger.pipeline: Run 20260929_223303: input=D:\DashTrip\PhanThietSaigon\Cam hanh trinh output=D:\DashTrip\PhanThietSaigon\Cam hanh trinh\merged
+2026-09-29 22:33:03,739 INFO    dashcam_merger.scanner: Scanned 92 video files in D:\DashTrip\PhanThietSaigon\Cam hanh trinh
+2026-09-29 22:33:03,740 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
+2026-09-29 22:33:03,741 INFO    dashcam_merger.ordering: Front: 46 clips ordered by timestamp
+2026-09-29 22:33:03,741 INFO    dashcam_merger.ordering: Rear: 46 clips ordered by timestamp
+2026-09-29 22:33:04,988 INFO    dashcam_merger.planner: Plan: 2 group(s), 2 part(s)
+2026-09-29 22:33:05,042 INFO    dashcam_merger.concat: Concat list Front_20260831152516_to_20260831161016.txt lists 46 clips
+2026-09-29 22:33:05,042 INFO    dashcam_merger.concat: Running: C:\Claude\40_DashCAMmerger\dist\DashCamMerger\ffmpeg\ffmpeg.exe -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i C:\Users\phong\AppData\Local\Temp\DashCamMerger\20260929_223303\Front_20260831152516_to_20260831161016.txt -c copy -movflags +faststart D:\DashTrip\PhanThietSaigon\Cam hanh trinh\merged\Front_20260831152516_to_20260831161016.partial.mp4
+2026-09-29 22:59:44,964 INFO    dashcam_merger.concat: ffmpeg exit 0 for Front_20260831152516_to_20260831161016.partial.mp4
+2026-09-29 22:59:46,797 INFO    dashcam_merger.safe_io: renamed Front_20260831152516_to_20260831161016.partial.mp4 -> Front_20260831152516_to_20260831161016.mp4
+2026-09-29 22:59:46,835 INFO    dashcam_merger.concat: Concat list Rear_20260831152517_to_20260831161017.txt lists 46 clips
+2026-09-29 22:59:46,835 INFO    dashcam_merger.concat: Running: C:\Claude\40_DashCAMmerger\dist\DashCamMerger\ffmpeg\ffmpeg.exe -y -hide_banner -nostats -loglevel error -progress pipe:1 -f concat -safe 0 -i C:\Users\phong\AppData\Local\Temp\DashCamMerger\20260929_223303\Rear_20260831152517_to_20260831161017.txt -c copy -movflags +faststart D:\DashTrip\PhanThietSaigon\Cam hanh trinh\merged\Rear_20260831152517_to_20260831161017.partial.mp4
+2026-09-29 23:17:13,809 INFO    dashcam_merger.concat: ffmpeg exit 0 for Rear_20260831152517_to_20260831161017.partial.mp4
+2026-09-29 23:17:15,226 INFO    dashcam_merger.safe_io: renamed Rear_20260831152517_to_20260831161017.partial.mp4 -> Rear_20260831152517_to_20260831161017.mp4
+2026-09-29 23:17:15,261 INFO    dashcam_merger.report: Report written to D:\DashTrip\PhanThietSaigon\Cam hanh trinh\merged\merge_report.txt

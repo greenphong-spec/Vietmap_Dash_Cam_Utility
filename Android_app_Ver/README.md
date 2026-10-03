@@ -40,6 +40,10 @@ hold a file over 4 GB.
 
 ## Using it
 
+The screen has three tabs — **Setup** (folders and options), **Files** (the files to
+export, full screen) and **Details** (plan text, report, errors). The Scan & plan /
+Merge buttons and the progress bar stay at the bottom on every tab.
+
 1. **Choose dashcam folder** — e.g. the SD card's `DCIM/Movie` (in the picker, open the
    SD card from the ☰ menu). Access is remembered.
 2. Optionally **Choose output folder** — e.g. *Phone → Movies → DashMerged* to copy the
@@ -47,7 +51,14 @@ hold a file over 4 GB.
 3. **Scan & plan** — shows each camera, clip count, codec, the files that will be
    written, and any warnings. If the file naming isn't recognised you assign each group
    to Front/Rear/Interior/Skip.
-4. **Merge** — progress bar; the screen stays on while merging (large merges take a few
+   Every output file has a checkbox (all ticked by default): untick the ones you don't
+   want, or use **Select all** / **Select none** or a camera's header box. Only the
+   ticked files are merged; the report lists the skipped ones.
+   **Order: By camera / By time** sorts the list (By time puts each trip's Front and
+   Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
+   **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
+   file from the same time.
+4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on while merging (large merges take a few
    minutes — keep the app in the foreground). **Cancel** keeps the partial file as
    `INCOMPLETE_DO_NOT_USE_*`.
 

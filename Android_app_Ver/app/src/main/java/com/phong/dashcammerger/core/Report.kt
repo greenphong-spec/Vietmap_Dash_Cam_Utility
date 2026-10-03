@@ -23,6 +23,19 @@ object Report {
         else -> String.format(Locale.US, "%.1f KB", bytes / KIB)
     }
 
+    /** Live line under the selection list (AR-10.8). */
+    fun selectionSummary(selected: List<OutputPart>, total: Int): String =
+        "Selected: ${selected.size} of $total file(s), ${formatSize(selected.sumOf { it.expectedSize })}"
+
+    /** AR-10.3 / AR-10.9: empty unless the output is known not to fit. */
+    fun spaceWarning(needed: Long, free: Long?): String =
+        if (free != null && needed > free) {
+            "NOT ENOUGH SPACE: needs about ${formatSize(needed)}, only ${formatSize(free)} free " +
+                "in the output folder. Free up space or choose another output folder."
+        } else {
+            ""
+        }
+
     /** Confirmation text shown before anything is written (FR-2.4). */
     fun planSummary(plan: MergePlan, outputFolder: String): String = buildString {
         for (group in plan.groups) {
@@ -52,6 +65,10 @@ object Report {
                 "    ${p.clips.size} files, ${formatDuration(if (r.actualDurationUs > 0) r.actualDurationUs else p.expectedDurationUs)}, " +
                     "${formatSize(r.actualSize)}  ->  ${r.status}" + if (r.reason.isNotEmpty()) " (${r.reason})" else ""
             )
+        }
+        if (report.skipped.isNotEmpty()) {
+            appendLine("Not selected (skipped by user): ${report.skipped.size}")
+            report.skipped.forEach { appendLine("    ${it.outputName}") }
         }
         appendLine(
             "Unclassified: ${plan.unclassified.size}   Skipped unreadable: ${plan.unreadable.size}   " +
