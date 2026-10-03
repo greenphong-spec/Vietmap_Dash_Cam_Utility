@@ -50,6 +50,7 @@ class RealVideoReplayTest {
         }
         println(
             "replay: samples=${samples.size} kept=$kept repaired=${track.timeRepaired} " +
+                "speedCorrected=${track.speedCorrected} maxSpeed=${track.stats.maxSpeedKmh}km/h " +
                 "rejected=${track.rejected} longestHole=${longestHole}s worstStep=${worstJumpKmh.toInt()}km/h " +
                 "distance=${"%.2f".format(track.stats.distanceM / 1000)}km"
         )

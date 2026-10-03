@@ -150,6 +150,98 @@ class CoreTest {
     }
 
     @Test
+    fun sameMisreadOnConsecutiveFramesIsDropped() {
+        // Seen on a real merged Front video: "10.3" read as "0.3" on two frames in a row
+        // (1112 km away and back), and "106.35" as "106.85" on two frames (55 km).
+        val list = samples(60) { sec ->
+            when (sec) {
+                20, 21 -> overlay(sec, lat = 0.76736)
+                40, 41 -> overlay(sec, lon = 106.63187 + sec * 0.0000915 + 0.5)
+                else -> overlay(sec)
+            }
+        }
+        val track = TrackCleaner.clean(list, vietmap)
+        assertEquals(56, track.fixes.size)
+        assertEquals(4, track.rejected[RejectReason.PositionJump])
+        listOf(20, 21, 40, 41).forEach { assertEquals(RejectReason.PositionJump, track.sampleStatus[it]) }
+        assertEquals(59 * 10.0, track.stats.distanceM, 15.0)
+    }
+
+    @Test
+    fun repeatedMisreadWhileStoppedAndAtTrackStartIsDropped() {
+        // Parked: the overlay text barely changes, so the same misread repeats for 8 frames.
+        val parked = samples(60) { sec ->
+            if (sec in 30..37) overlay(sec, lat = 16.76736, lon = 106.632, speed = 0) else overlay(sec, lon = 106.632, speed = 0)
+        }
+        assertEquals(52, TrackCleaner.clean(parked, vietmap).fixes.size)
+
+        // The first 3 frames misread, nothing before them to compare against.
+        val start = samples(30) { sec -> if (sec < 3) overlay(sec, lat = 0.76736) else overlay(sec) }
+        val track = TrackCleaner.clean(start, vietmap)
+        assertEquals(27, track.fixes.size)
+        assertEquals(3, track.fixes.first().sampleIndex)
+    }
+
+    @Test
+    fun misreadSpeedIsReplacedByGpsSpeedAndFixIsKept() {
+        // Driving at 36 km/h: frame 20 reads "300", frames 30-31 read "86" ("3" -> "8").
+        val list = samples(60) { sec ->
+            when (sec) {
+                20 -> overlay(sec, speed = 300)
+                30, 31 -> overlay(sec, speed = 86)
+                else -> overlay(sec)
+            }
+        }
+        val track = TrackCleaner.clean(list, vietmap)
+        assertEquals(60, track.fixes.size)
+        assertEquals(3, track.speedCorrected)
+        listOf(20, 30, 31).forEach { sec -> assertEquals(36.0, track.fixes[sec].speedKmh.toDouble(), 2.0) }
+        assertTrue("max ${track.stats.maxSpeedKmh}", track.stats.maxSpeedKmh <= 38)
+    }
+
+    @Test
+    fun smallSpikeIsDroppedUsingPrintedSpeed() {
+        // Real case: lat "10.37568" read as "10.37588" - 22 m off the road at 48 km/h,
+        // under the 40 m limit of the plain spike check.
+        val list = samples(30) { sec -> if (sec == 15) overlay(sec, lat = 10.76736 + 0.0002) else overlay(sec) }
+        val track = TrackCleaner.clean(list, vietmap)
+        assertEquals(29, track.fixes.size)
+        assertEquals(RejectReason.Spike, track.sampleStatus[15])
+
+        // Parked with ~4 m of GPS wander: jitter, not a misread.
+        val parked = samples(30) { sec ->
+            overlay(sec, lat = 10.76736 + (if (sec % 3 == 0) 0.00004 else 0.0), lon = 106.632, speed = 0)
+        }
+        assertEquals(30, TrackCleaner.clean(parked, vietmap).fixes.size)
+    }
+
+    @Test
+    fun sidewaysKinkIsDropped() {
+        // Real case: lon "106.33858" read as "106.33850" - 9 m sideways at 48 km/h. The
+        // distance driven barely changes, so only the curve fit catches it.
+        val list = samples(30) { sec -> if (sec == 15) overlay(sec, lat = 10.76736 + 0.00008) else overlay(sec) }
+        val track = TrackCleaner.clean(list, vietmap)
+        assertEquals(29, track.fixes.size)
+        assertEquals(RejectReason.Spike, track.sampleStatus[15])
+    }
+
+    @Test
+    fun realHardBrakingKeepsItsSpeeds() {
+        // 90 km/h for 20 s, brake to a stop in 5 s (18 km/h per second), stand for 20 s.
+        // Positions follow the speeds, so the GPS speed agrees with every printed value.
+        var lon = 106.63187
+        val speeds = List(20) { 90 } + listOf(72, 54, 36, 18, 0) + List(20) { 0 }
+        val list = speeds.mapIndexed { sec, v ->
+            if (sec > 0) lon += (speeds[sec - 1] + v) / 2 / 3.6 * 0.00000915
+            Sample(0, "Front.mp4", sec.toDouble(), overlay(sec, lon = lon, speed = v))
+        }
+        val track = TrackCleaner.clean(list, vietmap)
+        assertEquals(speeds.size, track.fixes.size)
+        assertEquals(0, track.speedCorrected)
+        assertEquals(speeds, track.fixes.map { it.speedKmh })
+    }
+
+    @Test
     fun ocrLogListsEveryFrameWithStatus() {
         val list = samples(5) + Sample(0, "Front.mp4", 5.0, "garbage")
         val log = exporters.ocrLog(TrackCleaner.clean(list, vietmap)).trim().lines()
@@ -206,6 +298,27 @@ class CoreTest {
         assertTrue(!kml.contains("gx:Track"))
         assertTrue(kml.contains("106.631870,10.767360,0"))
         assertTrue(kml.contains("Trip &lt;1&gt; &amp; more"))
+        assertTrue(kml.contains("<Placemark><name>Route</name>"))
+
+        // A Google Earth tour along the route: camera moves only, no extra geometry.
+        val gx = "http://www.google.com/kml/ext/2.2"
+        assertEquals(1, doc.getElementsByTagNameNS(gx, "Tour").length)
+        val flyTos = doc.getElementsByTagNameNS(gx, "FlyTo").length
+        assertEquals(track.fixes.size, flyTos) // 30 fixes, under the step limit
+    }
+
+    @Test
+    fun tourOfLongDriveIsCappedAndEndsAtTheEnd() {
+        val long = TrackCleaner.clean(samples(1000), vietmap)
+        val kml = exporters.kml(long, "t")
+        val doc = parseXml(kml)
+        val flyTos = doc.getElementsByTagNameNS("http://www.google.com/kml/ext/2.2", "FlyTo")
+        assertTrue("${flyTos.length}", flyTos.length <= Exporters.TOUR_MAX_STEPS + 1)
+        val last = flyTos.item(flyTos.length - 1).textContent
+        assertTrue(last.contains(String.format(java.util.Locale.US, "%.6f", long.fixes.last().lon)))
+        // The route reader still finds only the route line, not the tour's camera positions.
+        val route = RouteReader.read("t.kml", ByteArrayInputStream(kml.toByteArray()), ZoneId.of("Asia/Ho_Chi_Minh"))
+        assertEquals(1000, route.points.size)
     }
 
     @Test
@@ -214,6 +327,19 @@ class CoreTest {
         parseXml(kml)
         assertTrue(kml.contains("<gx:Track>"))
         assertTrue(kml.contains("<when>2026-09-13T04:31:00Z</when>")) // 11:31 at UTC+7
+
+        // The moving marker is visible, and the tour sets the time at every camera move so
+        // the marker drives along in front of the camera.
+        assertTrue(kml.contains("<Placemark><name>Moving marker (time slider / tour)</name><styleUrl>#car</styleUrl>"))
+        assertTrue(kml.contains("track-directional"))
+        assertTrue(kml.contains("<BalloonStyle><displayMode>hide</displayMode></BalloonStyle>"))
+        val gx = "http://www.google.com/kml/ext/2.2"
+        val doc = parseXml(kml)
+        val flyTos = doc.getElementsByTagNameNS(gx, "FlyTo").length
+        assertEquals(flyTos, kml.split("<LookAt><gx:TimeStamp><when>").size - 1)
+
+        // Without extras the tour moves the camera only (no time, no marker).
+        assertTrue(!exporters.kml(track, "t").contains("gx:TimeStamp"))
     }
 
     @Test

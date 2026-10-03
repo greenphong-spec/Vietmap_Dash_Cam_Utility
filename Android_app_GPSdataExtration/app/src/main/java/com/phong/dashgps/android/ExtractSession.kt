@@ -190,6 +190,7 @@ object ExtractSession {
         val good = t.fixes.size
         append(String.format(Locale.US, "Frames with valid GPS: %d of %d (%.0f%%)\n", good, t.samples, if (t.samples > 0) 100.0 * good / t.samples else 0.0))
         if (t.timeRepaired > 0) append("Time rebuilt from video clock: ${t.timeRepaired} (damaged time text)\n")
+        if (t.speedCorrected > 0) append("Speed corrected from GPS: ${t.speedCorrected} (misread speed text)\n")
         if (t.rejected.isNotEmpty()) {
             append("Dropped: ")
             append(t.rejected.entries.joinToString(", ") { "${it.value} ${it.key.label}" })

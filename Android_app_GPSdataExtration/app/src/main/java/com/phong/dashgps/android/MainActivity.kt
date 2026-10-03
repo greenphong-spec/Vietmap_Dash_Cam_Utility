@@ -121,6 +121,10 @@ private fun ExtractorScreen() {
             s.reset()
         }
     }
+    val rc = RouteCleanSession
+    val routePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) rc.load(ctx, uri)
+    }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             ctx.contentResolver.takePersistableUriPermission(
@@ -231,7 +235,7 @@ private fun ExtractorScreen() {
                         }
                     }
                     if (ExportFormat.KMZ in formats || ExportFormat.KML in formats) {
-                        CheckRow("KMZ/KML: add Google Earth extras (time slider, speed labels)", geExtras, !s.busy) {
+                        CheckRow("KMZ/KML: add Google Earth extras (moving marker in the tour and time slider, speed labels)", geExtras, !s.busy) {
                             geExtras = it
                             prefs.edit().putBoolean(KEY_GE_EXTRAS, it).apply()
                         }
@@ -265,6 +269,40 @@ private fun ExtractorScreen() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (map != null) Button(onClick = { openInMapApp(ctx, map) }) { Text("Open in Google Earth / map") }
                     OutlinedButton(onClick = { share(ctx, s.exported) }) { Text("Share") }
+                }
+            }
+        }
+
+        // Utility: clean a route file exported earlier (or by another app).
+        Section("Clean a route file (KML / KMZ / GPX)") {
+            Text(
+                "Removes misread points and corrects misread speeds in a saved route. The original file is not changed; " +
+                    "the result is saved as <name>_clean in the save folder.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            // Many file managers label .gpx / .kml / .kmz as generic binary, so offer every file.
+            OutlinedButton(onClick = { routePicker.launch(arrayOf("*/*")) }, enabled = !rc.busy && !s.busy) {
+                Text(if (rc.result == null) "Choose route file" else "Choose another file")
+            }
+            if (rc.status.isNotEmpty()) Text(rc.status, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            rc.result?.let { r ->
+                if (r.track.fixes.size >= 2) TrackPreview(r.track)
+                Text(rc.summary, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp)
+                Text(outTree?.let { "Save to: ${Storage.describeTree(it)}" } ?: "No save folder chosen", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (outTree == null) {
+                        OutlinedButton(onClick = { folderPicker.launch(null) }, enabled = !rc.busy) { Text("Choose save folder") }
+                    }
+                    Button(
+                        onClick = { outTree?.let { rc.save(ctx, it, geExtras) } },
+                        enabled = outTree != null && !rc.busy && r.track.fixes.isNotEmpty(),
+                    ) { Text("Save cleaned file") }
+                }
+            }
+            rc.saved?.let { f ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { openInMapApp(ctx, f) }) { Text("Open in map") }
+                    OutlinedButton(onClick = { share(ctx, listOf(f)) }) { Text("Share") }
                 }
             }
         }

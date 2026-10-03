@@ -90,6 +90,8 @@ class Track(
     val stats: TrackStats,
     /** Fixes whose damaged time text was rebuilt from the video clock (see TrackCleaner). */
     val timeRepaired: Int = 0,
+    /** Fixes whose misread speed was replaced by the speed their positions travel. */
+    val speedCorrected: Int = 0,
 ) {
     val samples: Int get() = sampleList.size
 }
