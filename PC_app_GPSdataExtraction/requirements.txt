@@ -1,0 +1,7 @@
+# Runtime (tested versions)
+av==18.0.0                       # FFmpeg libraries: keyframe seek + HEVC/H.264 decode
+onnxruntime==1.30.0              # OCR models (PP-OCRv6 small, see tools/fetch_models.py)
+opencv-python-headless>=4.10     # resize / contours for the OCR pipeline
+numpy>=2.0
+pillow>=11.0                     # test-frame preview, --save
+tzdata>=2025.1                   # IANA time zones (--tz) on Windows

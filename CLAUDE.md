@@ -108,6 +108,16 @@ paths, gap thresholds, `camera_profiles`), raising errors that name the
 offending key (FR-10). `config.app_dir()` is how the app locates itself
 relative to the exe/script for `logs/`, bundled `ffmpeg/`, etc.
 
+## DashCam GPS Extractor (PC)
+
+`PC_app_GPSdataExtraction/` is a separate Windows app (own README, tests, `build.bat`):
+the PC version of `Android_app_GPSdataExtration/`. Its `dashgps/core/` is a line-for-line
+port of the Android `core/` package and must produce byte-identical exports
+(`tests/test_parity.py` holds SHA-256 hashes of the Kotlin output). A change to parsing,
+cleaning or export in one app must be made in the other too, or the parity test fails.
+Only frame decoding (`frames.py`, PyAV) and OCR (`ocr.py`, PP-OCRv6 on ONNX Runtime,
+models fetched by `tools/fetch_models.py`, gitignored) are PC-specific.
+
 ## Testing conventions
 
 Tests mirror `core/` one-to-one (`test_<module>.py`). `test_integration.py`
