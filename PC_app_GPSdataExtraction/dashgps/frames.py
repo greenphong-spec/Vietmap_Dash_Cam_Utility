@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Callable, Iterator, Optional, Tuple
+from typing import Callable, Iterable, Iterator, Optional, Tuple
 
 import av
 import numpy as np
@@ -119,6 +119,31 @@ def sample(
             if max_frames is not None and fed >= max_frames:
                 break
         yield from frames(None)  # anything the decoder still holds
+
+
+def frames_at(path: str, positions: Iterable[float], crop: CropRect,
+              cancel: Optional[threading.Event] = None) -> Iterator[Tuple[float, np.ndarray]]:
+    """
+    (position, luma crop) of the keyframe at or before each position - for positions that
+    came from sample(), the very frame read then. The file is opened once.
+    """
+    with av.open(path) as c:
+        s = _video_stream(c)
+        s.thread_type = "SLICE"
+        cc = s.codec_context
+        cc.skip_frame = "NONKEY"
+        tb = s.time_base
+        start_pts = s.start_time or 0
+        for pos in positions:
+            if cancel is not None and cancel.is_set():
+                return
+            c.seek(int(round(pos / tb)) + start_pts, stream=s, backward=True, any_frame=False)
+            pkt = next((p for p in c.demux(s) if p.pts is not None and p.is_keyframe), None)
+            if pkt is None:
+                continue
+            for fr in list(cc.decode(pkt)) + list(cc.decode(None)):
+                yield float((fr.pts - start_pts) * tb), crop_luma(fr, crop)
+            cc.flush_buffers()
 
 
 def info_of(c, s) -> VideoInfo:

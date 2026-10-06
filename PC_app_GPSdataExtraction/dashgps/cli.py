@@ -86,6 +86,10 @@ def _extract(args, zone: Zone) -> int:
         print(profile.note)
 
     def progress(p):
+        if p.second_look:
+            print(f"\r  second look at unclear frames: {p.frames_read} / {int(p.duration_sec)}            ",
+                  end="", flush=True)
+            return
         print(f"\r  video {p.video_index + 1}/{p.video_count} {p.video_name}: {int(p.pos_sec)} / {int(p.duration_sec)} s"
               f" · {p.frames_read} frames · {p.fraction * 100:5.1f}%   ", end="", flush=True)
 

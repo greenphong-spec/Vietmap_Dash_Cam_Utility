@@ -24,10 +24,10 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 
 DET_MODEL = "PP-OCRv6_det_small.onnx"
 REC_MODEL = "PP-OCRv6_rec_small.onnx"
@@ -163,6 +163,39 @@ class Engine:
         crops = [gray[y0:y1, x0:x1] for x0, y0, x1, y1 in boxes]
         texts = [t for t, s in self.recognize(crops) if s >= TEXT_SCORE and t.strip()]
         return " ".join(texts)
+
+
+def _scaled(f: float):
+    def scale(gray: np.ndarray) -> np.ndarray:
+        h, w = gray.shape
+        return np.asarray(Image.fromarray(gray).resize((int(w * f), int(h * f)), Image.Resampling.BILINEAR))
+    return scale
+
+
+def _flatten(gray: np.ndarray) -> np.ndarray:
+    """Background flattened: minus a blur, so a lit sign or headlight behind thin white text fades."""
+    bg = np.asarray(Image.fromarray(gray).filter(ImageFilter.GaussianBlur(12))).astype(np.int16)
+    return np.clip(gray.astype(np.int16) - bg + 128, 0, 255).astype(np.uint8)
+
+
+def _autocontrast(gray: np.ndarray) -> np.ndarray:
+    return np.asarray(ImageOps.autocontrast(Image.fromarray(gray), cutoff=1))
+
+
+# Other views of the same strip for a second look, in the order tried. On the 277 frames a
+# 78-min day/night video lost, each view alone gave a parseable reading for 96-121 of
+# them, all five together for 150; the cleaner then kept 67 more frames.
+SECOND_LOOK = (_scaled(1.25), _flatten, _scaled(0.8), _scaled(1.5), _autocontrast)
+
+
+def second_look(crop: np.ndarray, first_text: str, accept: Callable[[str], bool]) -> Optional[str]:
+    """The first reading of a view of crop that accept()s and differs from first_text, or None."""
+    e = engine()
+    for view in SECOND_LOOK:
+        text = e.read(view(crop))
+        if text != first_text and accept(text):
+            return text
+    return None
 
 
 def _resize(gray: np.ndarray, w: int, h: int) -> np.ndarray:

@@ -45,6 +45,16 @@ with the phone) needs that space. ML Kit keeps it. The decoder therefore puts a 
 wherever the model still gives the space class some probability in the gap, even when
 another class won. In 600 real frames every such gap was a real word boundary.
 
+**Second look.** After cleaning, the frames that were unreadable or rejected as misreads
+are decoded again and read in other views: 1.25× scale, background flattened, 0.8×,
+1.5×, auto-contrast. The first reading that parses with a full time replaces the first
+one, and the track is cleaned again, so every replacement is still checked against its
+neighbours. Most of these frames are at night, with headlights or lit signs right behind
+the digits.
+
+On a full 78-minute merged front video (day into night, 4713 frames, 9.4 min on the test
+PC): **4469 kept (95%)**, one segment, longest gap 13 s. Without the second look: 4399.
+
 On 610 frames from 10 real Vietmap M1 front clips: **597 kept (98%)**. 9 dropped frames
 were clip-boundary duplicates, which is expected. 4 were real misreads (lost colon,
 digit or hemisphere letter), and the cleaner drops those exactly as on the phone.

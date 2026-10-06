@@ -20,16 +20,17 @@ from . import frames
 from .core import cleaner, routefiles
 from .core.exporters import ExportFormat, Exporters
 from .core.jvm import jfmt
-from .core.models import OverlayProfile, Sample, Track
+from .core.models import OverlayProfile, RejectReason, Sample, Track
 from .core.routefiles import RouteClean
 from .core.timezone import Zone
-from .ocr import OcrPool, default_workers
+from .ocr import OcrPool, default_workers, second_look
 
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".ts", ".avi", ".m4v")
 
 
 @dataclass
 class Progress:
+    """In the second look (second_look=True) pos_sec / duration_sec count frames, not seconds."""
     video_index: int
     video_count: int
     video_name: str
@@ -37,6 +38,7 @@ class Progress:
     duration_sec: float
     frames_read: int
     fraction: float
+    second_look: bool = False
 
 
 @dataclass
@@ -55,6 +57,9 @@ class Extraction:
     track: Track
     seconds: float
     cancelled: bool = False
+    #: Rejected frames read again, and how many of those gave a new usable reading.
+    second_looked: int = 0
+    second_look_changed: int = 0
 
     @property
     def title(self) -> str:
@@ -104,8 +109,12 @@ def extract(
     cancel: Optional[threading.Event] = None,
     on_progress: Callable[[Progress], None] = lambda p: None,
     workers: Optional[int] = None,
+    second_look_pass: bool = True,
 ) -> Extraction:
-    """Sample every video, OCR every sampled frame, then clean everything into one track."""
+    """
+    Sample every video, OCR every sampled frame, clean everything into one track, then take
+    a second look at the rejected frames (see _second_look) and clean again.
+    """
     cancel = cancel or threading.Event()
     started = time.monotonic()
     videos = [Path(v) for v in videos]
@@ -147,8 +156,53 @@ def extract(
             while pending:
                 drain_one()
 
-    track = cleaner.clean(collected, profile)
-    return Extraction(videos, profile, collected, track, time.monotonic() - started, cancel.is_set())
+        track = cleaner.clean(collected, profile)
+        looked = changed = 0
+        if second_look_pass and not cancel.is_set():
+            collected, looked, changed = _second_look(videos, profile, collected, track, ex, cancel, on_progress)
+            if changed:
+                track = cleaner.clean(collected, profile)
+    return Extraction(videos, profile, collected, track, time.monotonic() - started, cancel.is_set(), looked, changed)
+
+
+# Frames worth a second look: unreadable, or read but rejected as a likely misread.
+SECOND_LOOK_REASONS = {RejectReason.Unreadable, RejectReason.OutOfRange, RejectReason.TimeMismatch,
+                       RejectReason.PositionJump, RejectReason.Spike}
+
+
+def _second_look(videos, profile, samples, track, ex, cancel, on_progress):
+    """
+    Decode the rejected frames again and read other views of them (ocr.SECOND_LOOK). A
+    reading that parses with a full time replaces the first one; the caller cleans again,
+    so a second-look reading is checked against its neighbours like any other.
+    Returns (samples, frames looked at, readings replaced).
+    """
+    todo = [i for i, st in enumerate(track.sample_status) if st in SECOND_LOOK_REASONS]
+    if not todo:
+        return samples, 0, 0
+
+    def accept(text: str) -> bool:
+        r = profile.parse(text)
+        return r is not None and r.time is not None
+
+    futures = []
+    for v in sorted({samples[i].video_index for i in todo}):
+        idx = [i for i in todo if samples[i].video_index == v]
+        decoded = frames.frames_at(str(videos[v]), [samples[i].pos_sec for i in idx], profile.crop, cancel)
+        for i, (pos, crop) in zip(idx, decoded):
+            if abs(pos - samples[i].pos_sec) > 1e-3:
+                continue  # not the frame that was read the first time
+            futures.append((i, ex.submit(second_look, crop, samples[i].text, accept)))
+    out = list(samples)
+    changed = 0
+    for n, (i, fut) in enumerate(futures, 1):
+        text = fut.result()
+        s = samples[i]
+        on_progress(Progress(s.video_index, len(videos), s.video_name, n, len(futures), n, n / len(futures), True))
+        if text is not None:
+            out[i] = Sample(s.video_index, s.video_name, s.pos_sec, text)
+            changed += 1
+    return out, len(futures), changed
 
 
 def summary(x: Extraction, zone: Zone) -> str:
@@ -161,6 +215,9 @@ def summary(x: Extraction, zone: Zone) -> str:
         lines += f"Time rebuilt from video clock: {t.time_repaired} (damaged time text)\n"
     if t.speed_corrected > 0:
         lines += f"Speed corrected from GPS: {t.speed_corrected} (misread speed text)\n"
+    if x.second_looked:
+        lines += (f"Second look: {x.second_looked} unclear frame(s) read again, "
+                  f"{x.second_look_changed} gave a new reading\n")
     if t.rejected:
         lines += "Dropped: " + ", ".join(f"{v} {k.label}" for k, v in t.rejected.items()) + "\n"
     secs = int(x.seconds)

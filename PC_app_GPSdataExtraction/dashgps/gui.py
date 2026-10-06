@@ -299,6 +299,9 @@ class App:
                 if kind == "progress":
                     p = value
                     self.progress["value"] = p.fraction * 1000
+                    if p.second_look:
+                        self.status.set(f"Second look at unclear frames: {p.frames_read} / {int(p.duration_sec)}")
+                        continue
                     self.status.set(f"Video {p.video_index + 1}/{p.video_count}: {p.video_name}  ·  "
                                     f"{int(p.pos_sec)} / {int(p.duration_sec)} s  ·  {p.frames_read} frames read")
                     continue
