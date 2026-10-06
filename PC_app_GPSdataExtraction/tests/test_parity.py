@@ -16,12 +16,12 @@ from dashgps.core.timezone import Zone
 from test_routefiles import load_ocr_log
 
 ANDROID_SHA256 = {
-    "replay.csv": "88b482167a1af679590ac97f8eed322adf2d4a7106f9721e8cb626047a68dd2f",
-    "replay.gpx": "3e581b1b68ad4c3bdb5af0b551ccd99107006570b99aa9f65cba4832541a32d3",
-    "replay.kml": "85a01ba0688d8cbe2e9598a92708737676522728da2ec6c31c1fe95c0c88020e",
-    "replay_ge.kml": "ffd6cc0e10749a405e48f1aaa9bd087e2ae4ed8094596df55524b23ad138fec7",
-    "replay_ocr_log.csv": "5142da4a28df62b40f6843345b89d8339c139b516c4f6ba9a32ec4d1cf347544",
-    "replay_summary.txt": "950f485e99c16a6aaa6717d29bc611fced83023e290e88561f96b8dfabf92e29",
+    "replay.csv": "fcba5d63eafe383f9ce469450af8ebaea52390741f5124c261a8ea1a8fceec90",
+    "replay.gpx": "a762f9b38c317321cad38ea4bde4372f80d54734ff862ace346f1f1cce8424da",
+    "replay.kml": "091e0ce2f0ae51ca71bb48c528793b7515cd01c514f42bc0dc7576c8e29e3acf",
+    "replay_ge.kml": "b1ba3312fa5b4bc3abbde4915f5be7f2a90b813f588c8e680232c530487c48fb",
+    "replay_ocr_log.csv": "c7bea6328716320935c4ce5ad941d6d731737361c80adad982391d57c4d46a1e",
+    "replay_summary.txt": "091745b62700c3cff24ae2ce66d1cb1265917cb114e9366f1e7382f14b8e3149",
     "route_vietmap_front_route_noisy_gpx.csv": "cb726bac0e4f65f5dac10889ae356221f380657d5bc667e752df8e0e0075ba95",
     "route_vietmap_front_route_noisy_gpx.gpx": "e7357a444a87d2613aaa4f354fcfe0f81e30098107772afaf920782e7da808c9",
     "route_vietmap_front_route_noisy_gpx.kml": "41d3fcd51a2992f60df8b850adc3b5a53a589b93dd36b4ad2283526277cbd7a2",

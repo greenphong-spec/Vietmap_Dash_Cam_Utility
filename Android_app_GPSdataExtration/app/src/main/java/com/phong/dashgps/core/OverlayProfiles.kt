@@ -37,8 +37,8 @@ object OverlayProfiles {
     /** A "digit" as OCR may return it. */
     private const val D = "[0-9OQDUIL|!TZSBG]"
 
-    /** dd/MM/yyyy; OCR may turn "/" into f, l, I or 1, or drop it. */
-    private val DATE_DMY = Regex("""($D{2})\s*[/\\FLI1|]?\s*($D{2})\s*[/\\FLI1|]?\s*($D{4})""")
+    /** dd/MM/yyyy; OCR may turn "/" into f, l, I, 1 or 7 ("19/0972026"), or drop it. */
+    private val DATE_DMY = Regex("""($D{2})\s*[/\\FLI17|]?\s*($D{2})\s*[/\\FLI17|]?\s*($D{4})""")
     private val TIME_HMS = Regex("""(?<![0-9])($D{1,2})\s*[:;.]\s*($D{2})\s*[:;.]\s*($D{2})(?![0-9])""")
 
     /** Looser time shape, only used to recover the seconds when a digit is lost ("07:1:00"). */

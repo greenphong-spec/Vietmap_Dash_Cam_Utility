@@ -56,6 +56,9 @@ def test_recovers_damaged_separators_seen_on_real_video():
     assert p("24/09/2026 07:21:29 1KM/H N10.,78477 E 106.63633").lat == approx(10.78477, abs=1e-9)
     assert p("24/09/2026 07:15:35 38KM/H N10.78936 E 106.63 719").lon == approx(106.63719, abs=1e-9)
     assert p("24/09/2026 07:17:53 OKM/H N10.78908 E 10663696").lon == approx(106.63696, abs=1e-9)
+    # "/" read as "7" (ML Kit and PP-OCR both do it); was year 7202 / day 97.
+    assert p("19/0972026 18:55:45 4KM/H N10.35906 E106.35456").time == datetime(2026, 9, 19, 18, 55, 45)
+    assert p("M119709/2026 19:00:50 1KM/H N10.36376 E106.35228").time == datetime(2026, 9, 19, 19, 0, 50)
     # Truncated coordinate stays unusable.
     assert p("24/09/2026 07:26:24 34KM/H N10.78033 E 106.63") is None
 

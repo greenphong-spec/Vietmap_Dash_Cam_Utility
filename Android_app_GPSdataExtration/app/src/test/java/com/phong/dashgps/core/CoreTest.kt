@@ -58,6 +58,9 @@ class CoreTest {
         assertEquals(10.78477, p("24/09/2026 07:21:29 1KM/H N10.,78477 E 106.63633")!!.lat, 1e-9)
         assertEquals(106.63719, p("24/09/2026 07:15:35 38KM/H N10.78936 E 106.63 719")!!.lon, 1e-9)
         assertEquals(106.63696, p("24/09/2026 07:17:53 OKM/H N10.78908 E 10663696")!!.lon, 1e-9)
+        // "/" read as "7" (ML Kit and PP-OCR both do it); was year 7202 / day 97.
+        assertEquals(LocalDateTime.of(2026, 9, 19, 18, 55, 45), p("19/0972026 18:55:45 4KM/H N10.35906 E106.35456")!!.time)
+        assertEquals(LocalDateTime.of(2026, 9, 19, 19, 0, 50), p("M119709/2026 19:00:50 1KM/H N10.36376 E106.35228")!!.time)
         // Truncated coordinate stays unusable.
         assertNull(p("24/09/2026 07:26:24 34KM/H N10.78033 E 106.63"))
     }

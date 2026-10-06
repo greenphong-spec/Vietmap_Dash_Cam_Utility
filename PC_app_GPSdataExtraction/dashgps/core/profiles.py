@@ -18,8 +18,8 @@ _DIGIT_LOOKALIKES = {
 _D = "[0-9OQDUIL|!TZSBG]"
 _F = re.ASCII  # Java's \s is ASCII-only
 
-# dd/MM/yyyy; OCR may turn "/" into f, l, I or 1, or drop it.
-_DATE_DMY = re.compile(rf"({_D}{{2}})\s*[/\\FLI1|]?\s*({_D}{{2}})\s*[/\\FLI1|]?\s*({_D}{{4}})", _F)
+# dd/MM/yyyy; OCR may turn "/" into f, l, I, 1 or 7 ("19/0972026"), or drop it.
+_DATE_DMY = re.compile(rf"({_D}{{2}})\s*[/\\FLI17|]?\s*({_D}{{2}})\s*[/\\FLI17|]?\s*({_D}{{4}})", _F)
 _TIME_HMS = re.compile(rf"(?<![0-9])({_D}{{1,2}})\s*[:;.]\s*({_D}{{2}})\s*[:;.]\s*({_D}{{2}})(?![0-9])", _F)
 # Looser time shape, only used to recover the seconds when a digit is lost ("07:1:00").
 _TIME_LOOSE = re.compile(rf"(?<![0-9])({_D}{{1,2}})\s*[:;.]\s*({_D}{{1,2}})\s*[:;.]\s*({_D}{{2}})(?![0-9])", _F)
