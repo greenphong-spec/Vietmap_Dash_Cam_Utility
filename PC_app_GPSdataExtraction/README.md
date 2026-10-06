@@ -34,7 +34,7 @@ Only the two Android-specific parts are replaced:
 
 The models come from the RapidOCR wheel (Apache-2.0); `tools/fetch_models.py` downloads
 the pinned version and checks SHA-256 hashes. Instead of a general OCR wrapper, a short
-pipeline runs them for one strip of text: detection at 1024 px wide, boxes back onto the
+pipeline (numpy + Pillow, no OpenCV) runs them for one strip of text: detection at 1024 px wide, boxes back onto the
 full-resolution strip, recognition at 48 px height with few distinct input shapes, then
 CTC decoding. On the test PC (6-core Xeon E5-1650 v2, 2013, no AVX2) that is 0.09 s per
 frame with 6 threads, about **5–6 minutes per hour of video**. A newer CPU is faster.
@@ -77,8 +77,9 @@ DashGPS-cli clean D:\Routes\trip.gpx
 DashGPS-cli --tz Asia/Ho_Chi_Minh extract ...      # camera clock zone (default: this PC's)
 ```
 
-Folders are expanded to the video files inside them. Point it at front-camera files:
-rear clips have no GPS text and only add time.
+Folders are expanded to the video files inside them; in a folder with both front and rear
+clips (`…F.MP4` / `…R.MP4`, `Front_…` / `Rear_…`) the rear ones are skipped, since they have
+no GPS text. Files named one by one are always used.
 
 Times: the camera prints local time. KML/GPX need UTC, so times are converted with the
 PC's time zone, or with `--tz` / the **Camera clock time zone** field (the Android app

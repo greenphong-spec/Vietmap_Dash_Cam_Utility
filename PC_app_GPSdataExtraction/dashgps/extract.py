@@ -5,6 +5,7 @@ both call these functions and get progress through a callback.
 """
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections import deque
@@ -261,12 +262,28 @@ def save_route(c: RouteClean, folder: Path, zone: Zone, google_earth_extras: boo
     return SavedFile(path, fmt)
 
 
+_REAR = re.compile(r"(^rear[_ -])|(\d[rR]$)", re.IGNORECASE)
+_FRONT = re.compile(r"(^front[_ -])|(\d[fF]$)", re.IGNORECASE)
+
+
+def is_rear_clip(p: Path) -> bool:
+    """Vietmap "20260919174223_0018889R.MP4", DashCam Merger "Rear_….mp4"."""
+    return bool(_REAR.search(stem(p)))
+
+
 def find_videos(paths: Iterable[str]) -> List[Path]:
-    """Files as given; folders expanded to their video files. Sorted by name like the Android picker."""
+    """
+    Files as given; folders expanded to their video files. In a folder that holds both front
+    and rear clips, the rear ones are left out: they have no GPS text and would only add time.
+    Sorted by name like the Android picker.
+    """
     out = []
     for p in map(Path, paths):
         if p.is_dir():
-            out.extend(q for q in p.iterdir() if q.suffix.lower() in VIDEO_EXTENSIONS)
+            vids = [q for q in p.iterdir() if q.is_file() and q.suffix.lower() in VIDEO_EXTENSIONS]
+            if any(_FRONT.search(stem(q)) for q in vids):
+                vids = [q for q in vids if not is_rear_clip(q)]
+            out.extend(vids)
         else:
             out.append(p)
     return sorted(out, key=lambda q: q.name.lower())

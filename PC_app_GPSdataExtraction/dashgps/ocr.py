@@ -9,6 +9,7 @@ with a lean pipeline for one strip of horizontal text:
 1. detection on the strip scaled to at most DET_MAX_WIDTH wide (text stays ~15+ px tall);
 2. axis-aligned boxes from the probability map (DB post-processing: threshold, dilate,
    box score, unclip), mapped back onto the full-resolution strip;
+   numpy + Pillow only - no OpenCV, which would add 112 MB to the app for six functions;
 3. recognition of every box at 48 px height, batched, CTC-decoded;
 4. boxes joined left to right, line by line.
 
@@ -25,8 +26,8 @@ import threading
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import cv2
 import numpy as np
+from PIL import Image
 
 DET_MODEL = "PP-OCRv6_det_small.onnx"
 REC_MODEL = "PP-OCRv6_rec_small.onnx"
@@ -83,21 +84,18 @@ class Engine:
         scale = min(1.0, DET_MAX_WIDTH / w)
         dw = max(32, int(round(w * scale / 32)) * 32)
         dh = max(32, int(round(h * scale / 32)) * 32)
-        img = cv2.resize(gray, (dw, dh), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR)
+        img = _resize(gray, dw, dh)
         x = (img.astype(np.float32) / 255.0 - 0.5) / 0.5
         x = np.repeat(x[np.newaxis, np.newaxis], 3, axis=1)
         prob = self.det.run(None, {self._det_in: x})[0][0, 0]
-        mask = cv2.dilate((prob > DET_THRESH).astype(np.uint8), np.ones((2, 2), np.uint8))
-        contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         sx, sy = w / dw, h / dh
         boxes = []
-        for c in contours:
-            bx, by, bw, bh = cv2.boundingRect(c)
+        for ys, xs in _components(_dilate2(prob > DET_THRESH)):
+            by, bx = int(ys.min()), int(xs.min())
+            bh, bw = int(ys.max()) - by + 1, int(xs.max()) - bx + 1
             if min(bw, bh) < DET_MIN_SIZE:
                 continue
-            region = np.zeros((bh, bw), np.uint8)
-            cv2.drawContours(region, [c - [bx, by]], -1, 1, -1)
-            if cv2.mean(prob[by:by + bh, bx:bx + bw], region)[0] < DET_BOX_THRESH:
+            if prob[ys, xs].mean() < DET_BOX_THRESH:
                 continue
             d = bw * bh * DET_UNCLIP / (2 * (bw + bh))  # DB "unclip": grow by area * r / perimeter
             x0, y0 = (bx - d) * sx, (by - d) * sy
@@ -128,7 +126,7 @@ class Engine:
             batch = np.zeros((len(idx), 3, REC_HEIGHT, width), np.float32)
             for k, i in enumerate(idx):
                 rw = min(width, int(math.ceil(REC_HEIGHT * ratio[i])))
-                r = cv2.resize(images[i], (rw, REC_HEIGHT)).astype(np.float32)
+                r = _resize(images[i], rw, REC_HEIGHT).astype(np.float32)
                 batch[k, :, :, :rw] = (r / 255.0 - 0.5) / 0.5
             preds = self.rec.run(None, {self._rec_in: batch})[0]
             for k, i in enumerate(idx):
@@ -165,6 +163,64 @@ class Engine:
         crops = [gray[y0:y1, x0:x1] for x0, y0, x1, y1 in boxes]
         texts = [t for t, s in self.recognize(crops) if s >= TEXT_SCORE and t.strip()]
         return " ".join(texts)
+
+
+def _resize(gray: np.ndarray, w: int, h: int) -> np.ndarray:
+    """Area average when shrinking (like OpenCV INTER_AREA), bilinear when growing."""
+    shrink = w < gray.shape[1] and h < gray.shape[0]
+    method = Image.Resampling.BOX if shrink else Image.Resampling.BILINEAR
+    return np.asarray(Image.fromarray(gray).resize((w, h), method))
+
+
+def _dilate2(m: np.ndarray) -> np.ndarray:
+    """Dilation with a 2x2 square: a pixel is set if it or its left/upper/upper-left neighbour is."""
+    out = m.copy()
+    out[1:, :] |= m[:-1, :]
+    out[:, 1:] |= m[:, :-1]
+    out[1:, 1:] |= m[:-1, :-1]
+    return out
+
+
+def _components(mask: np.ndarray):
+    """8-connected regions of a boolean mask, as (rows, cols) index arrays. Works on runs of
+    set pixels per row, joined with union-find - a text map has only a few runs per row."""
+    runs = []  # (row, start, end) with end exclusive
+    for y, row in enumerate(mask):
+        edges = np.flatnonzero(np.diff(np.concatenate(([0], row.view(np.uint8), [0]))))
+        runs.extend((y, int(a), int(b)) for a, b in zip(edges[::2], edges[1::2]))
+    parent = list(range(len(runs)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    prev_lo = prev_hi = 0  # runs of the previous row: runs[prev_lo:prev_hi]
+    i = 0
+    while i < len(runs):
+        y = runs[i][0]
+        j = i
+        while j < len(runs) and runs[j][0] == y:
+            j += 1
+        if prev_hi > prev_lo and runs[prev_lo][0] == y - 1:
+            for k in range(i, j):
+                _, a, b = runs[k]
+                for q in range(prev_lo, prev_hi):
+                    _, pa, pb = runs[q]
+                    if pa <= b and a <= pb:  # overlap or touch diagonally
+                        ra, rb = find(k), find(q)
+                        if ra != rb:
+                            parent[ra] = rb
+        prev_lo, prev_hi = i, j
+        i = j
+    groups = {}
+    for k, (y, a, b) in enumerate(runs):
+        groups.setdefault(find(k), []).append((y, a, b))
+    for rs in groups.values():
+        ys = np.concatenate([np.full(b - a, y) for y, a, b in rs])
+        xs = np.concatenate([np.arange(a, b) for _, a, b in rs])
+        yield ys, xs
 
 
 def _reading_order(boxes):

@@ -163,3 +163,17 @@ def test_real_video_reads_cleanly():
     assert track.time_repaired >= 40
     assert longest_hole <= 20
     assert worst <= 80
+
+
+def test_folder_skips_rear_clips(tmp_path):
+    from dashgps.extract import find_videos
+    for n in ("20260919174222_0018888F.MP4", "20260919174223_0018889R.MP4", "Front_a.mp4", "Rear_a.mp4", "notes.txt"):
+        (tmp_path / n).write_bytes(b"")
+    assert [p.name for p in find_videos([str(tmp_path)])] == ["20260919174222_0018888F.MP4", "Front_a.mp4"]
+    # A file named on its own is always used.
+    assert [p.name for p in find_videos([str(tmp_path / "Rear_a.mp4")])] == ["Rear_a.mp4"]
+    # A folder of unlabelled videos is taken as is.
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "trip.mp4").write_bytes(b"")
+    assert [p.name for p in find_videos([str(other)])] == ["trip.mp4"]

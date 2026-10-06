@@ -70,8 +70,9 @@ class App:
         self._test_image = None
 
         root.title(TITLE)
-        root.geometry("980x860")
+        root.geometry(self.s.get("geometry", "980x860"))
         root.minsize(760, 600)
+        root.protocol("WM_DELETE_WINDOW", self._close)
 
         outer = ttk.Frame(root)
         outer.pack(fill="both", expand=True)
@@ -348,6 +349,14 @@ class App:
         if d:
             self.out_dir.set(d)
             self._persist()
+
+    def _close(self):
+        """Remember size and position; stop a running extraction (its thread is a daemon)."""
+        self.cancel.set()
+        if self.root.state() == "normal":
+            self.s["geometry"] = self.root.geometry()
+        self._persist()
+        self.root.destroy()
 
     def _cancel(self):
         self.cancel.set()
