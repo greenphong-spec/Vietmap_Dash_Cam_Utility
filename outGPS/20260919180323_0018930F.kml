@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+<Document>
+<name>20260919180323_0018930F</name>
+<description>20260919180323_0018930F
+Start: 2026-09-19 18:03:21   End: 2026-09-19 18:04:21   (camera time, UTC+07:00)
+Distance: 0.80 km   Points: 61   Segments: 1
+Max speed: 57 km/h   Average: 47.8 km/h
+Created by DashCam GPS Extractor.</description>
+<Style id="route"><LineStyle><color>ff0033ff</color><width>5</width></LineStyle></Style>
+<Style id="start"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/paddle/grn-circle.png</href></Icon></IconStyle></Style>
+<Style id="end"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/paddle/red-square.png</href></Icon></IconStyle></Style>
+<Placemark><name>Route</name><styleUrl>#route</styleUrl>
+<LineString><tessellate>1</tessellate><coordinates>106.340530,10.352790,0 106.340560,10.352670,0 106.340580,10.352550,0 106.340610,10.352430,0 106.340630,10.352320,0 106.340640,10.352210,0 106.340670,10.352110,0 106.340690,10.352000,0 106.340720,10.351900,0 106.340740,10.351790,0 106.340760,10.351680,0 106.340790,10.351570,0 106.340800,10.351470,0 106.340820,10.351360,0 106.340850,10.351260,0 106.340870,10.351150,0 106.340890,10.351050,0 106.340920,10.350940,0 106.340930,10.350840,0 106.340950,10.350730,0 106.340980,10.350620,0 106.341000,10.350500,0 106.341020,10.350390,0 106.341050,10.350270,0 106.341060,10.350160,0 106.341100,10.350040,0 106.341110,10.349930,0 106.341150,10.349820,0 106.341160,10.349700,0 106.341180,10.349590,0 106.341210,10.349470,0 106.341230,10.349350,0 106.341260,10.349240,0 106.341280,10.349120,0 106.341310,10.349000,0 106.341340,10.348880,0 106.341360,10.348760,0 106.341390,10.348640,0 106.341410,10.348520,0 106.341440,10.348410,0 106.341460,10.348290,0 106.341490,10.348170,0 106.341500,10.348040,0 106.341540,10.347920,0 106.341550,10.347800,0 106.341590,10.347670,0 106.341620,10.347550,0 106.341630,10.347420,0 106.341670,10.347290,0 106.341680,10.347160,0 106.341720,10.347030,0 106.341730,10.346900,0 106.341760,10.346780,0 106.341780,10.346650,0 106.341810,10.346520,0 106.341830,10.346400,0 106.341860,10.346270,0 106.341890,10.346150,0 106.341910,10.346030,0 106.341940,10.345910,0 106.341960,10.345790,0 </coordinates></LineString>
+</Placemark>
+<Placemark><name>Start</name><styleUrl>#start</styleUrl><description>2026-09-19 18:03:21 · 52 km/h</description><Point><coordinates>106.340530,10.352790,0</coordinates></Point></Placemark>
+<Placemark><name>End</name><styleUrl>#end</styleUrl><description>2026-09-19 18:04:21 · 55 km/h</description><Point><coordinates>106.341960,10.345790,0</coordinates></Point></Placemark>
+<gx:Tour><name>Fly along the route</name><gx:Playlist>
+<gx:FlyTo><gx:duration>3.00</gx:duration><gx:flyToMode>bounce</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:21Z</when></gx:TimeStamp><longitude>106.340530</longitude><latitude>10.352790</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:22Z</when></gx:TimeStamp><longitude>106.340560</longitude><latitude>10.352670</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:23Z</when></gx:TimeStamp><longitude>106.340580</longitude><latitude>10.352550</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:24Z</when></gx:TimeStamp><longitude>106.340610</longitude><latitude>10.352430</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:25Z</when></gx:TimeStamp><longitude>106.340630</longitude><latitude>10.352320</latitude><altitude>0</altitude><heading>174.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:26Z</when></gx:TimeStamp><longitude>106.340640</longitude><latitude>10.352210</latitude><altitude>0</altitude><heading>163.6</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:27Z</when></gx:TimeStamp><longitude>106.340670</longitude><latitude>10.352110</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:28Z</when></gx:TimeStamp><longitude>106.340690</longitude><latitude>10.352000</latitude><altitude>0</altitude><heading>163.6</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:29Z</when></gx:TimeStamp><longitude>106.340720</longitude><latitude>10.351900</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:30Z</when></gx:TimeStamp><longitude>106.340740</longitude><latitude>10.351790</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:31Z</when></gx:TimeStamp><longitude>106.340760</longitude><latitude>10.351680</latitude><altitude>0</altitude><heading>165.0</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:32Z</when></gx:TimeStamp><longitude>106.340790</longitude><latitude>10.351570</latitude><altitude>0</altitude><heading>174.4</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:33Z</when></gx:TimeStamp><longitude>106.340800</longitude><latitude>10.351470</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:34Z</when></gx:TimeStamp><longitude>106.340820</longitude><latitude>10.351360</latitude><altitude>0</altitude><heading>163.6</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:35Z</when></gx:TimeStamp><longitude>106.340850</longitude><latitude>10.351260</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:36Z</when></gx:TimeStamp><longitude>106.340870</longitude><latitude>10.351150</latitude><altitude>0</altitude><heading>168.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:37Z</when></gx:TimeStamp><longitude>106.340890</longitude><latitude>10.351050</latitude><altitude>0</altitude><heading>165.0</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:38Z</when></gx:TimeStamp><longitude>106.340920</longitude><latitude>10.350940</latitude><altitude>0</altitude><heading>174.4</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:39Z</when></gx:TimeStamp><longitude>106.340930</longitude><latitude>10.350840</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:40Z</when></gx:TimeStamp><longitude>106.340950</longitude><latitude>10.350730</latitude><altitude>0</altitude><heading>165.0</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:41Z</when></gx:TimeStamp><longitude>106.340980</longitude><latitude>10.350620</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:42Z</when></gx:TimeStamp><longitude>106.341000</longitude><latitude>10.350500</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:43Z</when></gx:TimeStamp><longitude>106.341020</longitude><latitude>10.350390</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:44Z</when></gx:TimeStamp><longitude>106.341050</longitude><latitude>10.350270</latitude><altitude>0</altitude><heading>174.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:45Z</when></gx:TimeStamp><longitude>106.341060</longitude><latitude>10.350160</latitude><altitude>0</altitude><heading>161.8</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:46Z</when></gx:TimeStamp><longitude>106.341100</longitude><latitude>10.350040</latitude><altitude>0</altitude><heading>174.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:47Z</when></gx:TimeStamp><longitude>106.341110</longitude><latitude>10.349930</latitude><altitude>0</altitude><heading>160.3</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:48Z</when></gx:TimeStamp><longitude>106.341150</longitude><latitude>10.349820</latitude><altitude>0</altitude><heading>175.3</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:49Z</when></gx:TimeStamp><longitude>106.341160</longitude><latitude>10.349700</latitude><altitude>0</altitude><heading>169.9</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:50Z</when></gx:TimeStamp><longitude>106.341180</longitude><latitude>10.349590</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:51Z</when></gx:TimeStamp><longitude>106.341210</longitude><latitude>10.349470</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:52Z</when></gx:TimeStamp><longitude>106.341230</longitude><latitude>10.349350</latitude><altitude>0</altitude><heading>165.0</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:53Z</when></gx:TimeStamp><longitude>106.341260</longitude><latitude>10.349240</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:54Z</when></gx:TimeStamp><longitude>106.341280</longitude><latitude>10.349120</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:55Z</when></gx:TimeStamp><longitude>106.341310</longitude><latitude>10.349000</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:56Z</when></gx:TimeStamp><longitude>106.341340</longitude><latitude>10.348880</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:57Z</when></gx:TimeStamp><longitude>106.341360</longitude><latitude>10.348760</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:58Z</when></gx:TimeStamp><longitude>106.341390</longitude><latitude>10.348640</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:03:59Z</when></gx:TimeStamp><longitude>106.341410</longitude><latitude>10.348520</latitude><altitude>0</altitude><heading>165.0</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:00Z</when></gx:TimeStamp><longitude>106.341440</longitude><latitude>10.348410</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:01Z</when></gx:TimeStamp><longitude>106.341460</longitude><latitude>10.348290</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:02Z</when></gx:TimeStamp><longitude>106.341490</longitude><latitude>10.348170</latitude><altitude>0</altitude><heading>175.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:03Z</when></gx:TimeStamp><longitude>106.341500</longitude><latitude>10.348040</latitude><altitude>0</altitude><heading>161.8</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:04Z</when></gx:TimeStamp><longitude>106.341540</longitude><latitude>10.347920</latitude><altitude>0</altitude><heading>175.3</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:05Z</when></gx:TimeStamp><longitude>106.341550</longitude><latitude>10.347800</latitude><altitude>0</altitude><heading>163.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:06Z</when></gx:TimeStamp><longitude>106.341590</longitude><latitude>10.347670</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:07Z</when></gx:TimeStamp><longitude>106.341620</longitude><latitude>10.347550</latitude><altitude>0</altitude><heading>175.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:08Z</when></gx:TimeStamp><longitude>106.341630</longitude><latitude>10.347420</latitude><altitude>0</altitude><heading>163.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:09Z</when></gx:TimeStamp><longitude>106.341670</longitude><latitude>10.347290</latitude><altitude>0</altitude><heading>175.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:10Z</when></gx:TimeStamp><longitude>106.341680</longitude><latitude>10.347160</latitude><altitude>0</altitude><heading>163.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:11Z</when></gx:TimeStamp><longitude>106.341720</longitude><latitude>10.347030</latitude><altitude>0</altitude><heading>175.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:12Z</when></gx:TimeStamp><longitude>106.341730</longitude><latitude>10.346900</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:13Z</when></gx:TimeStamp><longitude>106.341760</longitude><latitude>10.346780</latitude><altitude>0</altitude><heading>171.4</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:14Z</when></gx:TimeStamp><longitude>106.341780</longitude><latitude>10.346650</latitude><altitude>0</altitude><heading>167.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:15Z</when></gx:TimeStamp><longitude>106.341810</longitude><latitude>10.346520</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:16Z</when></gx:TimeStamp><longitude>106.341830</longitude><latitude>10.346400</latitude><altitude>0</altitude><heading>167.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:17Z</when></gx:TimeStamp><longitude>106.341860</longitude><latitude>10.346270</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:18Z</when></gx:TimeStamp><longitude>106.341890</longitude><latitude>10.346150</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:19Z</when></gx:TimeStamp><longitude>106.341910</longitude><latitude>10.346030</latitude><altitude>0</altitude><heading>166.2</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:20Z</when></gx:TimeStamp><longitude>106.341940</longitude><latitude>10.345910</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+<gx:FlyTo><gx:duration>0.20</gx:duration><gx:flyToMode>smooth</gx:flyToMode><LookAt><gx:TimeStamp><when>2026-09-19T11:04:21Z</when></gx:TimeStamp><longitude>106.341960</longitude><latitude>10.345790</latitude><altitude>0</altitude><heading>170.7</heading><tilt>65</tilt><range>350</range><altitudeMode>relativeToGround</altitudeMode></LookAt></gx:FlyTo>
+</gx:Playlist></gx:Tour>
+<Style id="pt"><IconStyle><scale>0.6</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href></Icon></IconStyle><LabelStyle><scale>0.7</scale></LabelStyle></Style>
+<Style id="car"><IconStyle><scale>1.3</scale><Icon><href>http://earth.google.com/images/kml-icons/track-directional/track-0.png</href></Icon></IconStyle><LabelStyle><scale>0</scale></LabelStyle><LineStyle><color>ff00ffff</color><width>3</width></LineStyle><BalloonStyle><displayMode>hide</displayMode></BalloonStyle></Style>
+<Placemark><name>Moving marker (time slider / tour)</name><styleUrl>#car</styleUrl><gx:MultiTrack>
+<gx:Track>
+<when>2026-09-19T11:03:21Z</when>
+<when>2026-09-19T11:03:22Z</when>
+<when>2026-09-19T11:03:23Z</when>
+<when>2026-09-19T11:03:24Z</when>
+<when>2026-09-19T11:03:25Z</when>
+<when>2026-09-19T11:03:26Z</when>
+<when>2026-09-19T11:03:27Z</when>
+<when>2026-09-19T11:03:28Z</when>
+<when>2026-09-19T11:03:29Z</when>
+<when>2026-09-19T11:03:30Z</when>
+<when>2026-09-19T11:03:31Z</when>
+<when>2026-09-19T11:03:32Z</when>
+<when>2026-09-19T11:03:33Z</when>
+<when>2026-09-19T11:03:34Z</when>
+<when>2026-09-19T11:03:35Z</when>
+<when>2026-09-19T11:03:36Z</when>
+<when>2026-09-19T11:03:37Z</when>
+<when>2026-09-19T11:03:38Z</when>
+<when>2026-09-19T11:03:39Z</when>
+<when>2026-09-19T11:03:40Z</when>
+<when>2026-09-19T11:03:41Z</when>
+<when>2026-09-19T11:03:42Z</when>
+<when>2026-09-19T11:03:43Z</when>
+<when>2026-09-19T11:03:44Z</when>
+<when>2026-09-19T11:03:45Z</when>
+<when>2026-09-19T11:03:46Z</when>
+<when>2026-09-19T11:03:47Z</when>
+<when>2026-09-19T11:03:48Z</when>
+<when>2026-09-19T11:03:49Z</when>
+<when>2026-09-19T11:03:50Z</when>
+<when>2026-09-19T11:03:51Z</when>
+<when>2026-09-19T11:03:52Z</when>
+<when>2026-09-19T11:03:53Z</when>
+<when>2026-09-19T11:03:54Z</when>
+<when>2026-09-19T11:03:55Z</when>
+<when>2026-09-19T11:03:56Z</when>
+<when>2026-09-19T11:03:57Z</when>
+<when>2026-09-19T11:03:58Z</when>
+<when>2026-09-19T11:03:59Z</when>
+<when>2026-09-19T11:04:00Z</when>
+<when>2026-09-19T11:04:01Z</when>
+<when>2026-09-19T11:04:02Z</when>
+<when>2026-09-19T11:04:03Z</when>
+<when>2026-09-19T11:04:04Z</when>
+<when>2026-09-19T11:04:05Z</when>
+<when>2026-09-19T11:04:06Z</when>
+<when>2026-09-19T11:04:07Z</when>
+<when>2026-09-19T11:04:08Z</when>
+<when>2026-09-19T11:04:09Z</when>
+<when>2026-09-19T11:04:10Z</when>
+<when>2026-09-19T11:04:11Z</when>
+<when>2026-09-19T11:04:12Z</when>
+<when>2026-09-19T11:04:13Z</when>
+<when>2026-09-19T11:04:14Z</when>
+<when>2026-09-19T11:04:15Z</when>
+<when>2026-09-19T11:04:16Z</when>
+<when>2026-09-19T11:04:17Z</when>
+<when>2026-09-19T11:04:18Z</when>
+<when>2026-09-19T11:04:19Z</when>
+<when>2026-09-19T11:04:20Z</when>
+<when>2026-09-19T11:04:21Z</when>
+<gx:coord>106.340530 10.352790 0</gx:coord>
+<gx:coord>106.340560 10.352670 0</gx:coord>
+<gx:coord>106.340580 10.352550 0</gx:coord>
+<gx:coord>106.340610 10.352430 0</gx:coord>
+<gx:coord>106.340630 10.352320 0</gx:coord>
+<gx:coord>106.340640 10.352210 0</gx:coord>
+<gx:coord>106.340670 10.352110 0</gx:coord>
+<gx:coord>106.340690 10.352000 0</gx:coord>
+<gx:coord>106.340720 10.351900 0</gx:coord>
+<gx:coord>106.340740 10.351790 0</gx:coord>
+<gx:coord>106.340760 10.351680 0</gx:coord>
+<gx:coord>106.340790 10.351570 0</gx:coord>
+<gx:coord>106.340800 10.351470 0</gx:coord>
+<gx:coord>106.340820 10.351360 0</gx:coord>
+<gx:coord>106.340850 10.351260 0</gx:coord>
+<gx:coord>106.340870 10.351150 0</gx:coord>
+<gx:coord>106.340890 10.351050 0</gx:coord>
+<gx:coord>106.340920 10.350940 0</gx:coord>
+<gx:coord>106.340930 10.350840 0</gx:coord>
+<gx:coord>106.340950 10.350730 0</gx:coord>
+<gx:coord>106.340980 10.350620 0</gx:coord>
+<gx:coord>106.341000 10.350500 0</gx:coord>
+<gx:coord>106.341020 10.350390 0</gx:coord>
+<gx:coord>106.341050 10.350270 0</gx:coord>
+<gx:coord>106.341060 10.350160 0</gx:coord>
+<gx:coord>106.341100 10.350040 0</gx:coord>
+<gx:coord>106.341110 10.349930 0</gx:coord>
+<gx:coord>106.341150 10.349820 0</gx:coord>
+<gx:coord>106.341160 10.349700 0</gx:coord>
+<gx:coord>106.341180 10.349590 0</gx:coord>
+<gx:coord>106.341210 10.349470 0</gx:coord>
+<gx:coord>106.341230 10.349350 0</gx:coord>
+<gx:coord>106.341260 10.349240 0</gx:coord>
+<gx:coord>106.341280 10.349120 0</gx:coord>
+<gx:coord>106.341310 10.349000 0</gx:coord>
+<gx:coord>106.341340 10.348880 0</gx:coord>
+<gx:coord>106.341360 10.348760 0</gx:coord>
+<gx:coord>106.341390 10.348640 0</gx:coord>
+<gx:coord>106.341410 10.348520 0</gx:coord>
+<gx:coord>106.341440 10.348410 0</gx:coord>
+<gx:coord>106.341460 10.348290 0</gx:coord>
+<gx:coord>106.341490 10.348170 0</gx:coord>
+<gx:coord>106.341500 10.348040 0</gx:coord>
+<gx:coord>106.341540 10.347920 0</gx:coord>
+<gx:coord>106.341550 10.347800 0</gx:coord>
+<gx:coord>106.341590 10.347670 0</gx:coord>
+<gx:coord>106.341620 10.347550 0</gx:coord>
+<gx:coord>106.341630 10.347420 0</gx:coord>
+<gx:coord>106.341670 10.347290 0</gx:coord>
+<gx:coord>106.341680 10.347160 0</gx:coord>
+<gx:coord>106.341720 10.347030 0</gx:coord>
+<gx:coord>106.341730 10.346900 0</gx:coord>
+<gx:coord>106.341760 10.346780 0</gx:coord>
+<gx:coord>106.341780 10.346650 0</gx:coord>
+<gx:coord>106.341810 10.346520 0</gx:coord>
+<gx:coord>106.341830 10.346400 0</gx:coord>
+<gx:coord>106.341860 10.346270 0</gx:coord>
+<gx:coord>106.341890 10.346150 0</gx:coord>
+<gx:coord>106.341910 10.346030 0</gx:coord>
+<gx:coord>106.341940 10.345910 0</gx:coord>
+<gx:coord>106.341960 10.345790 0</gx:coord>
+</gx:Track>
+</gx:MultiTrack></Placemark>
+<Folder><name>Speed every 10 s</name><visibility>0</visibility>
+<Placemark><name>52 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:03:21Z</when></TimeStamp><description>2026-09-19 18:03:21 · 52 km/h · 20260919180323_0018930F.MP4 @ 0 s</description><Point><coordinates>106.340530,10.352790,0</coordinates></Point></Placemark>
+<Placemark><name>49 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:03:31Z</when></TimeStamp><description>2026-09-19 18:03:31 · 49 km/h · 20260919180323_0018930F.MP4 @ 10 s</description><Point><coordinates>106.340760,10.351680,0</coordinates></Point></Placemark>
+<Placemark><name>49 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:03:41Z</when></TimeStamp><description>2026-09-19 18:03:41 · 49 km/h · 20260919180323_0018930F.MP4 @ 20 s</description><Point><coordinates>106.340980,10.350620,0</coordinates></Point></Placemark>
+<Placemark><name>52 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:03:51Z</when></TimeStamp><description>2026-09-19 18:03:51 · 52 km/h · 20260919180323_0018930F.MP4 @ 30 s</description><Point><coordinates>106.341210,10.349470,0</coordinates></Point></Placemark>
+<Placemark><name>53 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:04:01Z</when></TimeStamp><description>2026-09-19 18:04:01 · 53 km/h · 20260919180323_0018930F.MP4 @ 40 s</description><Point><coordinates>106.341460,10.348290,0</coordinates></Point></Placemark>
+<Placemark><name>57 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:04:11Z</when></TimeStamp><description>2026-09-19 18:04:11 · 57 km/h · 20260919180323_0018930F.MP4 @ 50 s</description><Point><coordinates>106.341720,10.347030,0</coordinates></Point></Placemark>
+<Placemark><name>55 km/h</name><visibility>0</visibility><styleUrl>#pt</styleUrl><TimeStamp><when>2026-09-19T11:04:21Z</when></TimeStamp><description>2026-09-19 18:04:21 · 55 km/h · 20260919180323_0018930F.MP4 @ 59 s</description><Point><coordinates>106.341960,10.345790,0</coordinates></Point></Placemark>
+</Folder>
+</Document>
+</kml>
