@@ -16,8 +16,8 @@ TS_SEP = re.compile(
 )
 SEQ = re.compile(r"(?<!\d)(\d{3,})(?!\d)")
 
-# Assumed clip length when a clip has not been probed yet (typical dashcam clip).
-DEFAULT_CLIP_SECONDS = 60.0
+# No clip length is assumed (FR-3.4a): dashcams record 1-, 3- or 5-minute clips, the
+# setting can change between drives, and the last clip of a drive is shorter.
 
 
 def _to_datetime(match: re.Match[str]) -> datetime | None:
@@ -99,20 +99,33 @@ def order_group(group: CameraGroup) -> None:
     log.info("%s: %d clips ordered by %s", group.camera, len(clips), group.order_source)
 
 
+def gap_seconds(before: ClipInfo, after: ClipInfo) -> float | None:
+    """End of `before` (start + probed duration) to start of `after`, or None if unknown.
+
+    No clip length is assumed (FR-3.4a): without a probed duration there is no gap.
+    """
+    if before.timestamp is None or after.timestamp is None or before.probe is None:
+        return None
+    return (after.timestamp - before.timestamp).total_seconds() - before.probe.duration
+
+
 def detect_gaps(group: CameraGroup, warn_seconds: int) -> None:
-    """Record recording gaps between consecutive clips (FR-3.4).
+    """Record recording gaps between consecutive clips (FR-3.4, FR-3.4a).
 
     Only meaningful when the group is ordered by timestamp; a gap is the time
-    between the end of one clip and the start of the next.
+    between the end of one clip (its start + its probed duration) and the
+    start of the next - never the difference of the two start times, which
+    would flag every pair of 5-minute clips. A pair whose first clip has no
+    probed duration is skipped: its length is unknown, not 60 s.
     """
     group.gaps = []
     if group.order_source != "timestamp":
         return
     clips = group.clips
     for before, after in zip(clips, clips[1:]):
-        if before.timestamp is None or after.timestamp is None:
+        gap = gap_seconds(before, after)
+        if gap is None:
+            log.debug("%s: no time or duration, gap to %s not checked", before.path.name, after.path.name)
             continue
-        duration = before.probe.duration if before.probe else DEFAULT_CLIP_SECONDS
-        gap = (after.timestamp - before.timestamp).total_seconds() - duration
         if gap > warn_seconds:
             group.gaps.append((before, after, gap))

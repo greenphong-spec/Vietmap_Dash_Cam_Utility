@@ -63,3 +63,28 @@ def make_clips(
                 target.write_bytes(data)
             created.append(target)
     return created
+
+
+def make_timed_clips(
+    dst: Path,
+    ffmpeg: Path,
+    clips: list[tuple[str, float]],
+    suffix: str = "F",
+) -> list[Path]:
+    """Create one clip per (YYYYMMDDhhmmss, seconds) - real lengths, so a 3- or 5-min
+    dashcam cycle can be tested (FR-3.4a). Tiny and 2 fps to stay fast."""
+    dst.mkdir(parents=True, exist_ok=True)
+    created: list[Path] = []
+    for index, (stamp, seconds) in enumerate(clips):
+        target = dst / f"{stamp}_{2 * index + 1:07d}{suffix}.MP4"
+        cmd = [
+            str(ffmpeg), "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "testsrc=size=160x90:rate=2",
+            "-f", "lavfi", "-i", "sine=frequency=440",
+            "-t", str(seconds),
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", str(target),
+        ]
+        subprocess.run(cmd, check=True, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        created.append(target)
+    return created

@@ -5,6 +5,36 @@ All notable changes to DashCam Merger.
 ## Unreleased
 
 ### Added
+- **Choose which trips to export** (Spec FR-3.6). GUI: an *Export* checkbox per row of the
+  plan table (click a row to tick/untick, *Select all* / *Select none*, "Export N of M
+  files"); rows are sorted by trip so Front and Rear of a trip sit together. CLI:
+  `--trips 1,3,5-7`. File names keep the whole folder's trip numbers; the plan and
+  `merge_report.txt` list what was not exported.
+
+### Changed
+- **Trips** (Spec FR-3.5, rev. 2026-10-17): clips are grouped into trips and each trip
+  becomes its own file, **on by default**. A break of more than **15 minutes** starts a new
+  trip (was: off, 30 min). Set it in the GUI (*Split into trips: new trip after a break of
+  more than N min*, remembered in `config.json`), with `--trip-gap-minutes N` /
+  `--no-split-on-gap` on the command line, or in `config.json` (`split_on_gap`,
+  `gap_split_seconds`). The trip gap no longer depends on `gap_warning_seconds`.
+- Output names: `_tripN` per trip; `_partM` now counts parts within a trip.
+- The GUI table shows one row per output file (Camera, Trip, Files, Duration, Size,
+  Start, End, Codec) with a scrollbar; the trip settings moved to the second options row.
+- The plan summary (CLI confirmation, `--dry-run`, GUI log) lists every trip with start,
+  end, files, duration and size. `--dry-run` now prints this summary (it printed only the
+  ffmpeg commands). Trip borders are no longer repeated as gap warnings.
+- Gap detection no longer assumes a 60 s clip (Spec FR-3.4a, rev. 2026-10-17). Dashcams
+  record 1-, 3- or 5-minute clips and the last clip of a drive is shorter, so the gap is
+  always the next clip's start minus the previous clip's start + *probed* duration; a pair
+  without a probed duration is skipped instead of guessed. Removed
+  `ordering.DEFAULT_CLIP_SECONDS`. Verified on a Vietmap M1 card with 3-min clips (228
+  clips): exactly the 8 real breaks per camera reported, none inside a drive.
+
+### Added
+- Tests for 3-min and 5-min clip cycles, a 1-min → 3-min setting change, and a short last
+  clip before a break (`test_ordering.py`, `test_integration.py`,
+  `fixtures/make_clips.make_timed_clips`).
 - `--delete-source` (CLI) and "Delete original clips after successful merge"
   (GUI) (FR-12): an explicit, off-by-default opt-in to permanently delete
   source clips once their merged output has passed verification. Requires a

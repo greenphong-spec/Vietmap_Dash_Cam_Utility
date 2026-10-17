@@ -247,6 +247,9 @@ class RunOptions:                         # everything the CLI/GUI can set per r
     recursive: bool = True
     camera_map: dict[str, CameraLabel] | None = None    # FR-2.3 (CLI form parsed)
     split_on_gap: bool | None = None      # None -> config value
+    trip_gap_minutes: float | None = None # None -> config gap_split_seconds (FR-3.5b)
+    trips: set[int] | None = None         # FR-3.6b, CLI --trips; None = all
+    selected_parts: set[str] | None = None  # FR-3.6a, planner.part_key() of ticked GUI rows
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False
@@ -271,8 +274,8 @@ DEFAULTS: dict = {
   "output_subfolder": "merged",
   "probe_sample_every": 20,
   "gap_warning_seconds": 300,
-  "gap_split_seconds": 1800,
-  "split_on_gap": False,
+  "gap_split_seconds": 900,
+  "split_on_gap": True,
   "max_part_gb": 0,
   "parallel_jobs": 1,
   "ffmpeg_path": "ffmpeg\\ffmpeg.exe",
@@ -506,11 +509,12 @@ def detect_gaps(group: CameraGroup, warn_seconds: int) -> None
   2. `elif all(c.sequence is not None for c in clips)`: `order_source = "sequence"`, key `(c.sequence, c.path.name.lower())`.
   3. `else`: `order_source = "mtime"`, key `(c.mtime, c.path.name.lower())` (FR-3.3 warning is added by the planner).
   Sort in place with `list.sort(key=...)` (stable).
-- `detect_gaps` (FR-3.4): only when `order_source == "timestamp"`. For consecutive clips a, b:
-  `gap = (b.timestamp - a.timestamp).total_seconds() - a_duration` where `a_duration` is
-  `a.probe.duration` if probed else `60.0` (typical clip). If `gap > warn_seconds` append
-  `(a, b, gap)` to `group.gaps`. Note: the planner calls `detect_gaps` **after** probing so real
-  durations are used whenever sampled.
+- `detect_gaps` (FR-3.4, FR-3.4a): only when `order_source == "timestamp"`. For consecutive
+  clips a, b: `gap = (b.timestamp - a.timestamp).total_seconds() - a.probe.duration` - end of a
+  to start of b, never start-to-start (5-min clips are 300-302 s apart). No clip length is
+  assumed: if `a.probe is None` the pair is skipped (logged at DEBUG). If `gap > warn_seconds`
+  append `(a, b, gap)` to `group.gaps`. The planner calls `detect_gaps` **after** probing every
+  clip and dropping unreadable ones, so every remaining clip has its real duration.
 
 Tests: 14-digit and separated timestamps; invalid date `20261399...` ignored; sequence picks the
 last ≥3-digit run outside the timestamp; group order by timestamp regardless of list order; mtime
@@ -565,17 +569,30 @@ Steps (in order):
 4. **Signature check** (FR-4.3/4.4): `sigs = {c.probe.signature for c in sampled if c.probe}`.
    If `len(sigs) > 1` **or** any sampled clip is unreadable: probe **every** clip in the group
    (unreadable ones stay flagged and are removed from the group into `plan.unreadable`).
-5. **Gaps**: `ordering.detect_gaps(g, cfg.gap_warning_seconds)`; for each gap add warning
-   `f"{g.camera}: gap of {gap/60:.1f} min between {a.name} and {b.name}"` (FR-3.4).
+5. **Gaps**: `ordering.detect_gaps(g, cfg.gap_warning_seconds)`; after step 6, for each gap
+   whose second clip does **not** start a trip add warning
+   `f"{g.camera}: gap of {gap/60:.1f} min between {a.name} and {b.name}"` (FR-3.4, FR-3.5e).
 6. **Split into parts** — produce `list[list[ClipInfo]]` per group by walking clips in order and
    starting a new part when any rule fires; record `split_reason` on the new part:
    - `codec change`: when the group was fully probed, `reencode` is False, and
      `clip.probe.signature != current_part_signature`. (With `opt.reencode` True never split for this reason; the single part gets `reencode=True` and `signature=None`.)
-   - `trip gap`: `split_on_gap` effective value is True and the gap before this clip exceeds `cfg.gap_split_seconds`. (FR-3.5)
+   - `trip gap`: `split_on_gap` effective value is True, `order_source == "timestamp"`, and
+     `ordering.gap_seconds(previous, clip)` (end-to-start, None if unknown) exceeds
+     `planner.trip_gap_seconds(cfg, opt)` = `opt.trip_gap_minutes * 60` or `cfg.gap_split_seconds`.
+     Computed directly, not from `group.gaps`, so it is independent of the warning threshold. (FR-3.5)
+   - Step 8 (after naming, so names use the whole folder's numbering): `_select(parts, opt,
+     warnings)` keeps a part when `opt.trips` (if set) contains its `trip_index` **and**
+     `opt.selected_parts` (if set) contains `part_key(part)` = `f"{camera}|{first clip name}"`
+     — stable between Scan and Merge. The rest go to `MergePlan.not_selected`; no ffmpeg
+     command is built for them. Unknown trip numbers add a warning. (FR-3.6)
+   - Then `_number_trips(reasons)` gives every part `trip_index`, `trip_count`, `trip_part`,
+     `trip_parts` (a `trip gap` reason starts a new trip). Only codec-change / max-size splits
+     add a "new part started because of …" warning.
    - `max part size`: `max_part_gb > 0` and `current_part_bytes + clip.size_bytes > max_part_gb * 1024**3` and the current part is not empty. (FR-6.8)
 7. **Name outputs** (FR-6.3): `first = part.clips[0]`, `last = part.clips[-1]`;
    `ts(c) = c.timestamp.strftime("%Y%m%d%H%M%S") if c.timestamp else c.path.stem`;
-   `name = f"{camera}_{ts(first)}_to_{ts(last)}"`; if `part_count > 1` append `f"_part{part_index}"`;
+   `name = f"{camera}_{ts(first)}_to_{ts(last)}"`; if `trip_count > 1` append `f"_trip{trip_index}"`;
+   if `trip_parts > 1` append `f"_part{trip_part}"`;
    extension `.mp4`. `output_path = output_dir / name.mp4`. If it exists and not `opt.overwrite`:
    `output_path = guard.unique_name(output_path)` (FR-6.2). `partial_path = output_dir / f"{final_stem}.partial.mp4"`.
    `list_path = temp_dir / f"{final_stem}.txt"` (or `output_dir / ...` when `opt.keep_lists`).
@@ -818,7 +835,10 @@ CLI and GUI):
 --yes                 store_true  -> assume_yes
 --no-recursive        store_true  -> recursive=False
 --camera-map TEXT     parsed by cameras.parse_camera_map_arg
---split-on-gap        store_true
+--split-on-gap        store_const True  } mutually exclusive, dest split_on_gap
+--no-split-on-gap     store_const False } (default None -> config value)
+--trip-gap-minutes N  float > 0 -> RunOptions.trip_gap_minutes
+--trips LIST          cli.parse_trips("1,3,5-7") -> RunOptions.trips (FR-3.6b)
 --max-part-gb FLOAT
 --reencode            store_true
 --overwrite           store_true
@@ -863,10 +883,16 @@ CLI and GUI):
 ```
 Row 0: [Label "Input folder"]  [Entry input_var (width 70)] [Button "Browse…"]
 Row 1: [Label "Output folder"] [Entry output_var]           [Button "Browse…"]
-Row 2: [Button "Scan"]  [Checkbutton "Split on trip gaps"] [Checkbutton "Re-encode if formats differ (slow)"]
+Row 2: [Button "Scan"] [Checkbutton "Re-encode if formats differ (slow)"]
        [Checkbutton "Overwrite existing outputs"] [Checkbutton "Delete original clips after successful merge
-       (cannot be undone)" - FR-12, default unchecked] [Label "Max part size (GB, 0 = unlimited)"] [Spinbox 0..64 step 1]
-Row 3: Treeview columns: Camera | Files | Total size | First clip | Last clip | Codec | Order source   (height 6)
+       (cannot be undone)" - FR-12, default unchecked]
+Row 3: Treeview, one row per OutputPart, sorted by (trip_index, trip_part):
+       Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec
+       (height 8, vertical scrollbar; Trip = report.part_label, Start/End = report.part_span)
+Row 4 (after the three buttons): [Button "Select all"] [Button "Select none"] [Label "Export N of M files"]
+Row 7: [Checkbutton "Split into trips: new trip after a break of more than" = cfg.split_on_gap]
+       [Spinbox 1..1440 = cfg.gap_split_seconds / 60] [Label "min"]
+       [Label "Max part size (GB, 0 = unlimited)"] [Spinbox 0..64 step 1]
 Row 4: [Button "Merge" (disabled until scan OK)] [Button "Cancel" (disabled until merging)] [Button "Open output folder" (disabled until done)]
 Row 5: Frame "progress_frame": one row per part -> Label(name) + ttk.Progressbar(length 400) + Label(status text)
 Row 6: ScrolledText log pane (height 10, state disabled, appended programmatically)
@@ -876,6 +902,16 @@ Menu:  File -> Open config.json | Open logs folder | Exit ;  Help -> About
 Window title `"DashCam Merger 1.0.0"`, `geometry("760x560")`, `minsize(640, 480)`.
 
 ### 9.2 Behaviour
+
+- Export selection (FR-3.6a): `row_keys` maps row id → `part_key`; `export_keys` holds the
+  ticked keys (all after a Scan). `<Button-1>` on a cell and `<space>` on selected rows call
+  `_toggle`. Merge passes `selected_parts=set(export_keys)`; a Scan passes None. The `plan`
+  event of a Merge run (only the ticked parts) does not refill the table (`_dry_run` flag).
+- Trip settings (FR-10.3): `App(cfg, config_path)`; `main()` passes `app_dir() / "config.json"`
+  (tests pass None, nothing is saved). On Scan/Merge, `_save_trip_settings()` calls
+  `config.save_settings(path, {"split_on_gap", "gap_split_seconds"})` when the values changed;
+  `save_settings` keeps all other keys and writes through `WriteGuard([path.parent])`. An
+  invalid trip gap (empty, not a number, ≤ 0) falls back to the config value.
 
 - **Browse…**: `filedialog.askdirectory()`. Setting input auto-fills output with `<input>\merged` if output is empty or was auto-filled.
 - **Scan**: runs `pipeline.run` with `dry_run=True` in a worker thread (so probing does not freeze the UI). The `GuiConfirmer.request_camera_map` shows the modal dialog (Section 9.3) — it must be invoked on the Tk main thread: the worker puts a request on the queue and waits on a `threading.Event` for the answer. On `kind="plan"` fill the Treeview: per group: camera, file count, `format_size(sum)`, first/last clip names, codec = `f"{sig.v_codec} {w}x{h}"` from the first probed clip (or "mixed"), order source. Enable **Merge**. Store the chosen camera mapping so the real merge does not ask again.
@@ -968,6 +1004,13 @@ def make_clips(dst: Path, ffmpeg: Path, camera_suffixes=("F", "R"), count=6, sec
   `ffmpeg -y -f lavfi -i testsrc=size=<size>:rate=30 -f lavfi -i sine=frequency=440 -t <seconds> -c:v libx264 -pix_fmt yuv420p -c:a aac <file>`.
 - `different_res_index`: that clip gets `size="320x180"`.
 - `truncate_index`: that clip is cut to its first 2 000 bytes after creation (unreadable).
+
+```python
+def make_timed_clips(dst: Path, ffmpeg: Path, clips: list[tuple[str, float]], suffix="F") -> list[Path]
+```
+- One clip per `(YYYYMMDDhhmmss, seconds)` with that real length (160x90, 2 fps, ultrafast), for
+  the 1/3/5-min clip-length tests (FR-3.4a): 3-min and 5-min cycles with ±1 s name jitter, a
+  1-min → 3-min setting change, and a short last clip before a 2 h break.
 
 ### 13.3 Integration tests (`@pytest.mark.integration`, require `ffmpeg\` present)
 

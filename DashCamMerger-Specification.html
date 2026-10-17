@@ -60,13 +60,13 @@ li{margin:3px 0}
 <a class="l2" href="#12-suggested-project-structure">12. Suggested project structure</a>
 <a class="l2" href="#13-future-ideas-not-in-v1">13. Future ideas (not in v1)</a></nav><main><h1 id="dashcam-merger-software-specification">DashCam Merger – Software Specification</h1>
 <p><strong>Version:</strong> 1.0 draft
-<strong>Date:</strong> 2026-09-14
+<strong>Date:</strong> 2026-09-14 (rev. 2026-10-17: clip length 1 / 3 / 5 min, FR-3.4 break rule; trips FR-3.5; trip selection FR-3.6)
 <strong>Target platform:</strong> Windows 10 / 11 (64-bit), fully offline
 <strong>Source of requirements:</strong> <code>merge-dashcam-camera-clips.md</code> (Claude skill) in this folder</p>
 <hr />
 <h2 id="1-purpose">1. Purpose</h2>
 <p>DashCam Merger is a standalone Windows program that takes a folder of short dashcam
-video segments (typically 1-minute clips) recorded by a multi-channel dashcam
+video segments (1-, 3- or 5-minute clips, per the camera's loop-recording setting) recorded by a multi-channel dashcam
 (Xforce, Vietmap, 70mai, and similar) and merges the clips of each camera
 (front / rear / interior) into one continuous video per camera, in correct
 chronological order, without re-encoding and without touching the original files.</p>
@@ -252,12 +252,57 @@ uses a rule table plus a confirmation dialog.</p>
 <li>FR-3.2 Sorting SHALL never rely on OS directory listing order.</li>
 <li>FR-3.3 If the key used is (d) file mtime, the tool SHALL display a warning
   ("Order based on file modification time, please spot-check") and write it to the log.</li>
-<li>FR-3.4 The tool SHALL detect gaps: if two consecutive timestamps differ by more than
-  <code>config.gap_warning_seconds</code> (default 300), it SHALL note "gap of N minutes between
-  clip X and clip Y" in the summary. Gaps do not block the merge.</li>
-<li>FR-3.5 Optional <code>--split-on-gap</code> (default off): start a new output part whenever a
-  gap larger than <code>gap_split_seconds</code> (default 1800) is detected, so separate trips
-  become separate files (<code>Front_trip1.mp4</code>, <code>Front_trip2.mp4</code>).</li>
+<li>FR-3.4 The tool SHALL detect gaps. The gap between two consecutive clips is the start
+  of the next clip minus the end of the previous one (its start + its probed duration),
+  <strong>not</strong> the difference of the two start times. If it is more than
+  <code>config.gap_warning_seconds</code> (default 300), the tool SHALL note "gap of N minutes
+  between clip X and clip Y" in the summary. Gaps do not block the merge.</li>
+<li>FR-3.4a Clip length SHALL NOT be assumed. Dashcams record 1-, 3- or 5-minute clips
+  (a camera setting, and it may change between drives on the same card), and the last
+  clip of each drive is shorter (it stops with the engine). Every rule that needs a clip's
+  length (gaps FR-3.4, trip splits FR-3.5, progress/ETA, verification FR-7) SHALL use the
+  probed duration. Measured on a Vietmap M1 card set to 3 min (Oct 2026): full clips are
+  180.000 s, consecutive clips of one drive have a gap of 0 s ± 2 s (file names carry
+  whole seconds), the Rear clip starts 0-1 s after its Front clip.</li>
+<li>FR-3.4b With start-to-start differences, 5-minute clips would differ by 300-302 s and
+  raise a false gap warning on almost every pair at the default 300 s; FR-3.4's
+  end-to-start rule gives ~0 s for any clip length. A clip lost from the middle of a drive
+  shows as a gap of one clip length (60 / 180 / 300 s), which the default 300 s does not
+  report.</li>
+<li>FR-3.5 Trips. A <strong>trip</strong> is a group of consecutive clips of one camera with no break
+  longer than the trip gap between them (break as defined in FR-3.4). Each trip becomes
+  its own output file.</li>
+<li>FR-3.5a Trip splitting is <strong>on by default</strong> (<code>split_on_gap</code>, GUI <em>Split into trips</em>,
+    CLI <code>--split-on-gap</code> / <code>--no-split-on-gap</code>). When off, each camera gives one file.</li>
+<li>FR-3.5b Trip gap default: a break of <strong>more than 15 minutes</strong> starts a new trip
+    (<code>gap_split_seconds</code> = 900). It SHALL be configurable in the PC app: GUI spinbox
+    <em>new trip after a break of more than N min</em>, CLI <code>--trip-gap-minutes N</code>, and
+    <code>config.json</code>. It is independent of <code>gap_warning_seconds</code> (a trip gap below the
+    warning threshold still splits).</li>
+<li>FR-3.5c Trips are only formed when clips are ordered by timestamp (FR-3.1 a/b); with
+    sequence or mtime ordering there is no reliable break, so one file per camera.</li>
+<li>FR-3.5d Before merging, the plan (CLI summary, <code>--dry-run</code>, GUI table) SHALL list
+    every trip: camera, trip n/N, start, end, files, duration, size.</li>
+<li>FR-3.5e A break that starts a new trip is not repeated as a FR-3.4 gap warning; a
+    stop inside a trip (longer than <code>gap_warning_seconds</code>, not longer than the trip
+    gap) still is.</li>
+<li>Measured on the Vietmap M1 card (14–17 Oct 2026, 3-min clips): 9 trips per camera;
+    the 3.5-min stop on 16 Oct stays inside its trip.</li>
+<li>FR-3.6 Export selection. The user SHALL be able to choose which output files (trips) are
+  exported instead of all at once.</li>
+<li>FR-3.6a GUI: the plan table has an <em>Export</em> checkbox per row (camera × trip), all
+    ticked after Scan; clicking a row (or Space on selected rows) toggles it; <em>Select all</em>
+    / <em>Select none</em> buttons; a label "Export N of M files". Rows are sorted by trip, so
+    the Front and Rear of one trip are next to each other. Merge is disabled while
+    nothing is ticked.</li>
+<li>FR-3.6b CLI: <code>--trips LIST</code> (e.g. <code>2</code>, <code>1,3,5-7</code>) exports only those trip numbers, for
+    every camera. A number that does not exist is a warning, not an error.</li>
+<li>FR-3.6c Trip numbers and file names come from the whole folder, so trip 3 is
+    <code>…_trip3.mp4</code> whether or not trips 1-2 are exported; a later run can export the
+    others with the same names.</li>
+<li>FR-3.6d The plan summary and the report SHALL say what was not exported:
+    "Not selected (not exported): N of M files - Front trip 1/9, …". Clips of a trip
+    that is not exported are never read by ffmpeg and never deleted (FR-12).</li>
 </ul>
 <h3 id="fr-4-codec-consistency-check">FR-4 Codec consistency check</h3>
 <ul>
@@ -295,7 +340,9 @@ uses a rule table plus a confirmation dialog.</p>
   The folder is created if missing. Existing outputs are never overwritten silently:
   the tool appends <code>_2</code>, <code>_3</code>… unless <code>--overwrite</code> is given.</li>
 <li>FR-6.3 Output file naming: <code>&lt;Camera&gt;_&lt;firstTimestamp&gt;_to_&lt;lastTimestamp&gt;.mp4</code>,
-  e.g. <code>Front_20260831152516_to_20260831171203.mp4</code>. Parts add <code>_partN</code>.</li>
+  e.g. <code>Front_20260831152516_to_20260831171203.mp4</code>. When a camera has several trips
+  each file adds <code>_tripN</code>; a trip split further (codec change, max part size) adds
+  <code>_partM</code>, numbered within the trip (<code>…_trip2_part1.mp4</code>).</li>
 <li>FR-6.4 The tool SHALL write to a temporary name <code>&lt;name&gt;.partial.mp4</code> and rename to
   the final name only after verification (FR-7) passes. This guarantees a finished
   <code>.mp4</code> in <code>merged\</code> is always a good file.</li>
@@ -355,8 +402,8 @@ Output folder: D:\DCIM\Movie\merged
   &quot;output_subfolder&quot;: &quot;merged&quot;,
   &quot;probe_sample_every&quot;: 20,
   &quot;gap_warning_seconds&quot;: 300,
-  &quot;gap_split_seconds&quot;: 1800,
-  &quot;split_on_gap&quot;: false,
+  &quot;gap_split_seconds&quot;: 900,
+  &quot;split_on_gap&quot;: true,
   &quot;max_part_gb&quot;: 0,
   &quot;parallel_jobs&quot;: 1,
   &quot;ffmpeg_path&quot;: &quot;ffmpeg\\ffmpeg.exe&quot;,
@@ -365,15 +412,26 @@ Output folder: D:\DCIM\Movie\merged
 }
 </code></pre>
 <p>Missing keys use defaults; an invalid file produces a clear error naming the line.</p>
+<ul>
+<li>FR-10.3 The GUI SHALL remember the trip settings (<em>Split into trips</em> and the trip gap)
+  by writing <code>split_on_gap</code> and <code>gap_split_seconds</code> to <code>config.json</code> when Scan or Merge
+  is clicked with changed values; every other key is kept. This is the only file the
+  program writes outside the output, temp and logs folders (FR-8). If <code>config.json</code>
+  cannot be written, the run continues with the values shown and the log says so.</li>
+</ul>
 <h3 id="fr-11-cli-reference">FR-11 CLI reference</h3>
 <pre><code>DashCamMerger.exe --input &lt;folder&gt; [--output &lt;folder&gt;] [--yes] [--no-recursive]
-                  [--camera-map &quot;F=Front,R=Rear&quot;] [--split-on-gap] [--max-part-gb N]
+                  [--camera-map &quot;F=Front,R=Rear&quot;] [--split-on-gap | --no-split-on-gap]
+                  [--trip-gap-minutes N] [--trips LIST] [--max-part-gb N]
                   [--reencode] [--overwrite] [--keep-lists] [--parallel N]
                   [--dry-run] [--delete-source] [--verbose] [--version]
 </code></pre>
 <ul>
-<li><code>--dry-run</code> performs scan, grouping, ordering and probing, prints the plan and the
-  exact ffmpeg commands, and writes nothing.</li>
+<li><code>--dry-run</code> performs scan, grouping, ordering and probing, prints the plan (with the
+  trips, FR-3.5d) and the exact ffmpeg commands, and writes nothing.</li>
+<li><code>--trip-gap-minutes N</code> (N &gt; 0) overrides <code>gap_split_seconds</code> for this run only.</li>
+<li><code>--trips LIST</code> exports only the listed trips (FR-3.6b); run <code>--dry-run</code> first to see
+  the numbers.</li>
 <li>Exit codes: 0 = all groups PASS; 1 = at least one group FAIL; 2 = usage/config error;
   3 = no input files; 130 = cancelled by user.</li>
 </ul>
@@ -400,12 +458,16 @@ Output folder: D:\DCIM\Movie\merged
 <ol>
 <li><strong>Input folder</strong> – entry + <strong>Browse…</strong> button.</li>
 <li><strong>Output folder</strong> – entry, defaults to <code>&lt;input&gt;\merged</code>, + <strong>Browse…</strong>.</li>
-<li><strong>Scan</strong> button → fills a table: Camera | Files | Total size | First clip | Last clip |
-   Codec | Order source (timestamp / mtime). Unclassified row if any.</li>
-<li>Options checkboxes: <em>Split on trip gaps</em>, <em>Re-encode if formats differ (slow)</em>,
-   <em>Overwrite existing outputs</em>, <em>Delete original clips after successful merge
-   (cannot be undone)</em> (FR-12, off by default); spinbox <em>Max part size (GB,
-   0 = unlimited)</em>.</li>
+<li><strong>Scan</strong> button → fills a table with one row per output file (per trip, FR-3.5d):
+   Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec, with a
+   vertical scrollbar, sorted by trip. Unclassified row if any. Click a row to tick or
+   untick it; <em>Select all</em>, <em>Select none</em> and "Export N of M files" sit next to the
+   Merge button (FR-3.6a).</li>
+<li>Options checkboxes: <em>Re-encode if formats differ (slow)</em>, <em>Overwrite existing
+   outputs</em>, <em>Delete original clips after successful merge (cannot be undone)</em> (FR-12,
+   off by default). Second row: checkbox <em>Split into trips: new trip after a break of
+   more than</em> + spinbox <em>N</em> <em>min</em> (from <code>config.json</code>, default on / 15, remembered per
+   FR-10.3); spinbox <em>Max part size (GB, 0 = unlimited)</em>.</li>
 <li><strong>Merge</strong> button (enabled after a successful scan) and <strong>Cancel</strong> button.</li>
 <li>Progress area: one progress bar per camera group with percent, MB/s, ETA;
    a scrolling log pane below.</li>
@@ -483,6 +545,15 @@ Output folder: D:\DCIM\Movie\merged
 <li>Inject one clip with different resolution → expect two parts and a warning.</li>
 <li>Inject one truncated file → expect it skipped and reported, job still PASS for the rest.</li>
 <li>Cancel mid-run → expect <code>INCOMPLETE_DO_NOT_USE_</code> file and no deletion.</li>
+<li>Trip selection (FR-3.6): <code>--trips 2</code> on 3 trips × Front/Rear → only the two <code>_trip2</code>
+  files; the report says "Not selected (not exported): 4 of 6 files"; sources unchanged.</li>
+<li>Trips (FR-3.5): two drives 20 min apart with a 10-min stop inside the second →
+  <code>_trip1</code> and <code>_trip2</code> files, PASS; <code>--trip-gap-minutes 5</code> on a 10-min break → 2 trips
+  in the <code>--dry-run</code> plan, default 15 → 1 file.</li>
+<li>Clip-length cases (FR-3.4a): 3 clips of 180 s and 3 clips of 300 s, file-name times one
+  clip length apart (± 1 s) → one part each, PASS, no gap warning; a folder with 60 s clips
+  followed by 180 s clips (setting changed) → one part, PASS; a short last clip followed
+  by a clip 2 h later → one gap warning of ~2 h.</li>
 </ul>
 <h3 id="acceptance-criteria-user-visible">Acceptance criteria (user-visible)</h3>
 <ol>

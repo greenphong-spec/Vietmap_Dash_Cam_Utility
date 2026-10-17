@@ -19,7 +19,7 @@ from dashcam_merger.core.pipeline import AutoConfirmer, run
 from dashcam_merger.core.progress import NullSink
 
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
-from make_clips import make_clips  # noqa: E402
+from make_clips import make_clips, make_timed_clips  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.integration
@@ -75,6 +75,55 @@ def test_it1_six_front_six_rear_merge_cleanly(cfg, ffmpeg_path, ffprobe_path, tm
     assert "PASS" in (merged / "merge_report.txt").read_text(encoding="utf-8")
     assert not list(merged.glob("*.partial.mp4"))
     assert snapshot(clips_dir) == before  # sources byte-for-byte unchanged
+
+
+# ------------------------------------------------- clip length (FR-3.4a)
+def _merge_timed(cfg, ffmpeg_path, ffprobe_path, folder, clips, split_on_gap=None):
+    make_timed_clips(folder, ffmpeg_path, clips)
+    opt = RunOptions(input_dir=folder, assume_yes=True, split_on_gap=split_on_gap)
+    report = run(cfg, opt, AutoConfirmer(), NullSink(), threading.Event())
+    gap_warnings = [w for w in report.plan.warnings if "gap of" in w]
+    return report, gap_warnings
+
+
+@pytest.mark.parametrize(
+    "clips",
+    [
+        # 3-min cycle, names one clip length apart +- 1 s (Vietmap M1).
+        [("20261017130506", 180), ("20261017130807", 180), ("20261017131106", 180)],
+        # 5-min cycle: start-to-start 300-301 s must not be reported as a gap.
+        [("20261017080000", 300), ("20261017080501", 300), ("20261017081001", 300)],
+        # Setting changed from 1 to 3 min between two clips of one folder.
+        [("20261013070000", 60), ("20261013070100", 60), ("20261013070200", 180)],
+    ],
+    ids=["3min", "5min", "1min-then-3min"],
+)
+def test_clip_lengths_merge_without_gap_warning(cfg, ffmpeg_path, ffprobe_path, tmp_path, clips):
+    report, gaps = _merge_timed(cfg, ffmpeg_path, ffprobe_path, tmp_path / "Movie", clips)
+    assert report.exit_code == 0
+    assert [r.status for r in report.results] == ["PASS"]
+    assert gaps == []
+    expected = sum(seconds for _, seconds in clips)
+    assert duration_of(ffprobe_path, report.results[0].final_path) == pytest.approx(expected, abs=1.0)
+
+
+def test_short_last_clip_then_break_gives_one_gap_warning(cfg, ffmpeg_path, ffprobe_path, tmp_path):
+    clips = [("20261014075736", 180), ("20261014080036", 8), ("20261014100036", 180)]
+    report, gaps = _merge_timed(
+        cfg, ffmpeg_path, ffprobe_path, tmp_path / "Movie", clips, split_on_gap=False
+    )
+    assert report.exit_code == 0
+    assert len(report.results) == 1  # trips off: one file, the break is a warning
+    assert len(gaps) == 1
+    assert "gap of 119.9 min" in gaps[0]  # 2 h minus the 8 s clip
+
+
+def test_short_last_clip_then_break_starts_a_trip(cfg, ffmpeg_path, ffprobe_path, tmp_path):
+    clips = [("20261014075736", 180), ("20261014080036", 8), ("20261014100036", 180)]
+    report, gaps = _merge_timed(cfg, ffmpeg_path, ffprobe_path, tmp_path / "Movie", clips)
+    assert [len(r.part.clips) for r in report.results] == [2, 1]
+    assert all(r.status == "PASS" for r in report.results)
+    assert gaps == []  # the trip list shows the break
 
 
 # ---------------------------------------------------------------- IT-2
@@ -322,3 +371,50 @@ def test_safety_grep_only_logging_setup_and_cleanup_delete(needle):
 def test_no_shell_true_anywhere():
     for path in (ROOT / "src").rglob("*.py"):
         assert "shell=True" not in path.read_text(encoding="utf-8"), path
+
+
+# ------------------------------------------------------- trips (FR-3.5)
+def test_trips_become_separate_files(cfg, ffmpeg_path, ffprobe_path, tmp_path):
+    # Two drives of 10 s clips, 20 min apart (> 15 min default) with a 10 min stop
+    # inside the second one (< 15 min, stays in the trip).
+    clips = [("20261014075700", 10), ("20261014075710", 10),
+             ("20261014081720", 10), ("20261014082730", 10)]
+    folder = tmp_path / "Movie"
+    report, _ = _merge_timed(cfg, ffmpeg_path, ffprobe_path, folder, clips)
+    assert report.exit_code == 0
+    names = sorted(r.final_path.name for r in report.results)
+    assert names == [
+        "Front_20261014075700_to_20261014075710_trip1.mp4",
+        "Front_20261014081720_to_20261014082730_trip2.mp4",
+    ]
+    assert all(r.status == "PASS" for r in report.results)
+
+
+def test_cli_trip_gap_minutes_overrides_config(cfg, ffmpeg_path, tmp_path, capsys):
+    clips = [("20261014075700", 5), ("20261014080705", 5)]  # 10 min break
+    folder = tmp_path / "Movie"
+    make_timed_clips(folder, ffmpeg_path, clips)
+    assert run_cli(["--input", str(folder), "--dry-run", "--trip-gap-minutes", "5"]) == 0
+    out = capsys.readouterr().out
+    assert "Front trip 1/2" in out and "Front trip 2/2" in out  # dry run shows the trips
+    assert run_cli(["--input", str(folder), "--dry-run"]) == 0  # 15 min: one file
+    assert "trip 1/" not in capsys.readouterr().out
+
+
+
+# ------------------------------------------------ export selection (FR-3.6)
+def test_cli_trips_exports_only_the_chosen_trip(cfg, ffmpeg_path, tmp_path):
+    folder = tmp_path / "Movie"
+    for suffix in ("F", "R"):
+        make_timed_clips(folder, ffmpeg_path, [("20261014075700", 5), ("20261014085700", 5),
+                                              ("20261014095700", 5)], suffix=suffix)
+    before = snapshot(folder)
+    assert run_cli(["--input", str(folder), "--yes", "--trips", "2"]) == 0
+    names = sorted(p.name for p in (folder / "merged").glob("*.mp4"))
+    assert names == [
+        "Front_20261014085700_to_20261014085700_trip2.mp4",
+        "Rear_20261014085700_to_20261014085700_trip2.mp4",
+    ]
+    report = (folder / "merged" / "merge_report.txt").read_text(encoding="utf-8")
+    assert "Not selected (not exported): 4 of 6 files" in report
+    assert snapshot(folder) == before

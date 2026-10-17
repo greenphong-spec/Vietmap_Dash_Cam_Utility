@@ -1,7 +1,7 @@
 # DashCam Trip Sorter – Software Specification
 
 **Version:** 0.1 (draft – waiting for answers in [OPEN_POINTS.md](OPEN_POINTS.md))
-**Date:** 2026-10-07
+**Date:** 2026-10-07 (rev. 2026-10-17: clip length 1 / 3 / 5 min, new card measured)
 **Target platform:** Windows 10/11 PC, SD card in a card reader (or any folder)
 **Source of requirements:** the owner's request ("separate the videos from the dashcam SD
 card into one folder per trip"), and the trips the owner has already sorted by hand in
@@ -16,10 +16,10 @@ answered, the behaviour written here is the *(recommended)* option.
 
 ## 1. Purpose
 
-A dashcam writes a flat stream of 1-minute clips to its SD card: hundreds of files per
-day, Front and Rear mixed, with no notion of where one drive ends and the next begins. The
-owner now sorts these by hand into trip folders on the PC, before merging them (DashCam
-Merger) or extracting the route (GPS Extractor).
+A dashcam writes a flat stream of short clips (1, 3 or 5 minutes each, a camera setting) to
+its SD card: hundreds of files per day, Front and Rear mixed, with no notion of where one
+drive ends and the next begins. The owner now sorts these by hand into trip folders on the
+PC, before merging them (DashCam Merger) or extracting the route (GPS Extractor).
 
 The Trip Sorter does this sorting:
 1. reads the card;
@@ -33,10 +33,12 @@ The card is not changed unless the owner asks for it.
 
 | Item | Value | Source |
 |---|---|---|
-| Card layout | Clips in `\Vietmap_M1\Movie`; other folders unknown → OP-8 | Android merger spec, DT-4 |
+| Card layout | Clips in `\Vietmap_M1\Movie` (the only folder under `Vietmap_M1`). Card root also holds map data (`*.bin`), `format.dat`, `LOST.DIR\`, `System Volume Information\` - not clips | card `E:\`, 17 Oct 2026 |
 | Clip names | `20260919174222_0018888F.MP4` (Front), `20260919174223_0018889R.MP4` (Rear): `<YYYYMMDDhhmmss>_<number><F/R>` | `D:\DashTrip` |
-| Clip length | 60 s; the Rear clip starts ~1 s after its Front clip | `D:\DashTrip` |
-| Clip size | Front ≈ 106 MB (2560×1440 HEVC); about 6–7 GB per hour of Front video | `D:\DashTrip` |
+| Clip length | A camera setting: **1, 3 or 5 min**. Seen: 60 s (Sep 2026, `D:\DashTrip`) and 180 s (Oct 2026, card). It can change between drives on one card. The **last clip of a drive is shorter** (8–179 s seen): it stops with the engine | `D:\DashTrip`, card `E:\` |
+| Clip timing | Inside a drive the next clip starts when the previous one ends: break 0 s ± 2 s (names carry whole seconds). The Rear clip starts 0–1 s after its Front clip; lengths differ by ≤ 0.2 s | card `E:\` (228 clips) |
+| Clip numbers | One counter for Front and Rear together (here Front odd, Rear even); it restarts after the card is formatted (card formatted 13 Oct → first clip `0000015`) | card `E:\` |
+| Clip size | Front 2560×1440 HEVC 30 fps: ≈ 106 MB per 1-min clip, ≈ 331 MB per 3-min clip - about 6.6 GB per hour. Rear 1920×1080 H.264 30 fps: ≈ 228 MB per 3-min clip, about 4.6 GB per hour | `D:\DashTrip`, card `E:\` |
 | Card read speed | ≈ 0.5 GB/min seen on the phone; PC readers are usually faster | Android merger spec |
 
 The owner's three hand-sorted trips (breaks = time between the end of one Front clip and the
@@ -47,6 +49,24 @@ start of the next):
 | `LeoCauRachMieu` | 79 | 19 Sep 17:42 – 19:00 | none |
 | `PhanThietSaigon\Cam hanh trinh` | 46 | 31 Aug 15:25 – 16:10 | none |
 | `TienGiang_SaiGon_12-13.Sep.2026` | 261 | 12 Sep 09:26 – 13 Sep 11:44 | 7 h 20 min, 32 min, 13 h 16 min, 41 min, 9 min |
+
+The new card (14–17 Oct 2026, 3-min clips, 114 Front + 114 Rear) - daily commutes. With
+the 30-min break rule it gives 9 trips:
+
+| Trip | Front clips | Span | Breaks inside |
+|---|---|---|---|
+| 1 | 2 | 14 Oct 07:57 – 08:00 | none (3 min 8 s: a full clip + an 8 s clip) |
+| 2 | 10 | 14 Oct 15:42 – 16:12 | none |
+| 3 | 9 | 15 Oct 07:32 – 07:58 | none |
+| 4 | 9 | 15 Oct 15:44 – 16:11 | none |
+| 5 | 8 | 16 Oct 07:13 – 07:35 | none |
+| 6 | 18 | 16 Oct 15:42 – 16:36 | 3.5 min (16:21 → 16:24, short stop) |
+| 7 | 28 | 17 Oct 07:37 – 09:00 | none |
+| 8 | 11 | 17 Oct 10:58 – 11:30 | none |
+| 9 | 19 | 17 Oct 13:05 – 14:01 | none |
+
+Breaks between them: 1 h 35 min, 1 h 58 min, 7 h 42 min – 8 h 7 min (work day) and
+15 h 1 min – 15 h 20 min (overnight).
 
 **Consequence:** for this owner a trip is a *journey*, which can include long stops and a
 night away. A fixed break rule alone cannot reproduce that, so trips are proposed by
@@ -112,7 +132,16 @@ card reader.
   - camera (Front / Rear / other), by the camera profiles of DashCam Merger;
   - start time and clip number from the file name;
   - size and duration.
-  The duration comes from ffprobe; it is 60 s when probing is turned off.
+  The duration comes from ffprobe. The clip length is never fixed at 60 s (see §2). When
+  probing is turned off, the duration is `config.clip_minutes` → **OP-19**:
+  - `"auto"` *(recommended)*: the most common start-to-start step between consecutive
+    clips of one camera, rounded to 1, 3 or 5 min, worked out per run of clips (so a card
+    whose setting changed between drives is still right);
+  - `1`, `3` or `5`: fixed.
+- FR-2.2a The last clip of a drive is shorter than the setting. Without probing, the
+  break after it is under-estimated by up to one clip length (5 min at most). The tool
+  SHALL therefore probe the clip just before every break that is within one clip length
+  of `config.trip_break_minutes`, so that trip borders never depend on an assumed length.
 - FR-2.3 A Rear clip SHALL be paired with the Front clip that starts within
   `config.pair_tolerance_seconds` (default 5) of it. Pairs always go to the same trip.
 - FR-2.4 Event / locked clips, photos and parking clips SHALL be included or left out per
@@ -128,7 +157,8 @@ card reader.
 - FR-3.3 A new trip SHALL be proposed where the break exceeds `config.trip_break_minutes`
   (default 30) → **OP-1, OP-2**.
 - FR-3.4 Trips shorter than `config.short_trip_minutes` (default 3) SHALL be marked
-  "short" → **OP-14**.
+  "short" → **OP-14**. Note: with 3- or 5-min clips a short trip is often one or two clips
+  (14 Oct 07:57, 3 min 8 s, is just above the default).
 - FR-3.5 If a proposed trip continues a trip already in the destination (starts within the
   break limit after it ends), the tool SHALL offer to join it → **OP-10**.
 - FR-3.6 (only if OP-1 (d) is chosen) GPS rule: a trip ends at a break where the car is at a
@@ -207,6 +237,7 @@ card reader.
   - `destination`
   - `trip_break_minutes`
   - `short_trip_minutes`
+  - `clip_minutes` (`"auto"`, 1, 3 or 5; FR-2.2)
   - `pair_tolerance_seconds`
   - `include` (movie/event/photo)
   - `name_pattern`
@@ -260,7 +291,8 @@ card reader.
 
 | ID | Setup | Expected |
 |---|---|---|
-| IT-1 | Synthetic card: 3 bursts of F/R clips with breaks of 2 h and 5 min | 2 trips at a 30-min break; the 5-min break stays inside a trip |
+| IT-1 | Synthetic card: 3 bursts of F/R clips with breaks of 2 h and 5 min; run once each with 1-, 3- and 5-min clips, each burst ending in a short clip | 2 trips at a 30-min break; the 5-min break stays inside a trip; same result with probing on and off |
+| IT-1b | Synthetic card: 1-min clips, then 3-min clips after a 1 h break (setting changed) | `clip_minutes: "auto"` finds 1 and 3 min per run; breaks inside each run ≈ 0 s |
 | IT-2 | The file names of the owner's 3 sorted trips (386 Front clips + their Rear clips; names and times only) | Proposal with breaks > 30 min; joining as the owner did gives exactly the owner's 3 trips |
 | IT-3 | Copy to a destination that already holds half of the clips | Only the missing half is copied; nothing is overwritten |
 | IT-4 | Interrupt the copy halfway (kill the process) and rerun | Same trips; `.partial` redone; all files verified |
@@ -268,6 +300,7 @@ card reader.
 | IT-6 | Delete from card on; one copy made to fail | Only verified clips deleted; the failed one stays |
 | IT-7 | Clips with impossible time (2000-01-01) | Handled per OP-13, warning in the log |
 | IT-8 | Safety grep | Only the FR-7 module contains a delete call |
+| IT-9 | The file names and probed durations of the 14–17 Oct card (228 clips, 3-min) | The 9 trips of §2; the 3.5-min stop stays inside trip 6; every Rear clip paired |
 | AT-1 | Real Vietmap M1 card, owner's choice of trips | Trip folders that DashCam Merger merges without warnings |
 
 ## 11. Build and release

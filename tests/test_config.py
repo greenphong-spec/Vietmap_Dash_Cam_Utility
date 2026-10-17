@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from dashcam_merger.core.config import ConfigError, DEFAULTS, app_dir, load_config
+from dashcam_merger.core.config import ConfigError, DEFAULTS, app_dir, load_config, save_settings
 
 
 def write_cfg(tmp_path, data) -> object:
@@ -105,3 +105,32 @@ def test_max_part_gb_negative_rejected(tmp_path):
     with pytest.raises(ConfigError) as excinfo:
         load_config(path)
     assert "max_part_gb" in str(excinfo.value)
+
+
+def test_trips_on_by_default_after_fifteen_minutes(tmp_path):
+    cfg = load_config(tmp_path / "missing.json")
+    assert cfg.split_on_gap is True and cfg.gap_split_seconds == 900
+
+
+def test_shipped_config_json_matches_defaults():
+    shipped = json.loads((app_dir() / "config.json").read_text(encoding="utf-8"))
+    assert shipped["split_on_gap"] is True and shipped["gap_split_seconds"] == 900
+
+
+def test_save_settings_changes_only_given_keys(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text('{"output_subfolder": "out", "split_on_gap": true}', encoding="utf-8")
+    save_settings(path, {"gap_split_seconds": 1200, "split_on_gap": False})
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw == {"output_subfolder": "out", "split_on_gap": False, "gap_split_seconds": 1200}
+
+
+def test_save_settings_creates_missing_file(tmp_path):
+    path = tmp_path / "config.json"
+    save_settings(path, {"gap_split_seconds": 600})
+    assert load_config(path).gap_split_seconds == 600
+
+
+def test_save_settings_rejects_unknown_key(tmp_path):
+    with pytest.raises(ConfigError, match="nonsense"):
+        save_settings(tmp_path / "config.json", {"nonsense": 1})

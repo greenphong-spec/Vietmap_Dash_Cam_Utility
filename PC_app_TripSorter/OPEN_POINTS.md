@@ -139,8 +139,15 @@ If event clips are sorted, put them:
 ### OP-8 What is on your SD card?
 
 **Why it matters:** the program finds the clip folders by itself, but it should be tested on
-the real layout. What is known so far: clips are in `\Vietmap_M1\Movie`, as 1-minute files
-named `20260919174222_0018888F.MP4` (Front) and `…_0018889R.MP4` (Rear).
+the real layout. What is known so far: clips are in `\Vietmap_M1\Movie`, named
+`20260919174222_0018888F.MP4` (Front) and `…_0018889R.MP4` (Rear). Clip length is the
+camera's loop-recording setting: 1-min clips in September, 3-min clips since the card was
+formatted on 13 Oct; 5 min is also possible (see OP-19).
+
+Seen on the card (`E:\`, 17 Oct 2026): `Vietmap_M1\Movie\` (clips only), map data
+`citiesen.bin`, `districtsen.bin`, `edogen.bin`, `roadsen.bin`, `format.dat`, `LOST.DIR\`,
+`System Volume Information\`. No event / photo / parking folder yet - they may appear once
+the camera records an event (OP-7).
 
 Please list the folders on the card (or paste the output of `dir /s /b X:\ | more` with X =
 card drive, first ~30 lines are enough):
@@ -240,6 +247,20 @@ the start and end of each trip need to be read, so this is fast.
   breaks, source card.
 - [ ] One `trips.csv` index of all trips in the destination folder (for Excel).
 - [ ] A KMZ with all trips' routes (needs the GPS Extractor; slow).
+
+**Answer / notes:** ______________________________
+
+### OP-19 Clip length when the program does not measure every clip
+
+**Why it matters:** the camera records 1-, 3- or 5-minute clips (your setting; 3 min now).
+Measuring every clip with ffprobe is exact but slower on a card reader. Without measuring,
+the program needs to know the clip length to find the breaks. The last clip before you
+switch the engine off is always shorter, so that one is measured in any case (FR-2.2a).
+
+- [ ] *(recommended)* Automatic: worked out from the clip start times (every 3 min → 3-min
+  clips); a card with mixed lengths is handled.
+- [ ] Always measure every clip (slower, never wrong).
+- [ ] Fixed in `config.json`: ___ min (1 / 3 / 5).
 
 **Answer / notes:** ______________________________
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from dashcam_merger.core.models import CameraGroup, ClipInfo, ProbeResult, StreamSignature
 from dashcam_merger.core.ordering import (
     annotate,
@@ -115,38 +117,93 @@ def test_order_never_depends_on_listing_order():
     assert [c.path.name for c in g1.clips] == [c.path.name for c in g2.clips]
 
 
-def test_gap_of_ten_minutes_detected_with_sixty_second_clips():
-    a = clip("20260831152500_0000001F.MP4")
-    b = clip("20260831153600_0000002F.MP4")  # 11 min later, clip a is 60 s long
-    annotate([a, b])
-    group = CameraGroup(camera="Front", clips=[a, b])
+def probed(name: str, seconds: float) -> ClipInfo:
+    c = clip(name)
+    c.probe = ProbeResult(duration=seconds, size_bytes=1000, signature=SIG)
+    return c
+
+
+def gaps_of(*clips: ClipInfo, warn_seconds: int = 300) -> list[tuple[ClipInfo, ClipInfo, float]]:
+    annotate(list(clips))
+    group = CameraGroup(camera="Front", clips=list(clips))
     order_group(group)
-    detect_gaps(group, warn_seconds=300)
-    assert len(group.gaps) == 1
-    before, after, gap = group.gaps[0]
+    detect_gaps(group, warn_seconds=warn_seconds)
+    return group.gaps
+
+
+def test_gap_of_ten_minutes_detected_with_sixty_second_clips():
+    a = probed("20260831152500_0000001F.MP4", 60.0)
+    b = probed("20260831153600_0000002F.MP4", 60.0)  # 11 min later, clip a is 60 s long
+    gaps = gaps_of(a, b)
+    assert len(gaps) == 1
+    before, after, gap = gaps[0]
     assert before is a and after is b
     assert gap == 600.0
 
 
 def test_no_gap_for_consecutive_clips():
-    a = clip("20260831152500_0000001F.MP4")
-    b = clip("20260831152600_0000002F.MP4")
-    annotate([a, b])
-    group = CameraGroup(camera="Front", clips=[a, b])
-    order_group(group)
-    detect_gaps(group, warn_seconds=300)
-    assert group.gaps == []
+    assert gaps_of(
+        probed("20260831152500_0000001F.MP4", 60.0),
+        probed("20260831152600_0000002F.MP4", 60.0),
+    ) == []
 
 
 def test_gap_uses_probed_duration_when_available():
-    a = clip("20260831152500_0000001F.MP4")
+    a = probed("20260831152500_0000001F.MP4", 180.0)
     b = clip("20260831153000_0000002F.MP4")  # 5 min later
-    a.probe = ProbeResult(duration=180.0, size_bytes=1000, signature=SIG)
-    annotate([a, b])
-    group = CameraGroup(camera="Front", clips=[a, b])
-    order_group(group)
-    detect_gaps(group, warn_seconds=100)
-    assert group.gaps[0][2] == 120.0  # 300 s apart minus a 180 s clip
+    gaps = gaps_of(a, b, warn_seconds=100)
+    assert gaps[0][2] == 120.0  # 300 s apart minus a 180 s clip
+
+
+def test_unprobed_clip_length_is_not_assumed():
+    # FR-3.4a: no 60 s default - without a duration the pair is not judged.
+    assert gaps_of(
+        clip("20260831152500_0000001F.MP4"),
+        clip("20261001080000_0000002F.MP4"),
+        warn_seconds=1,
+    ) == []
+
+
+def test_three_minute_clips_with_name_jitter_have_no_gap():
+    # Vietmap M1, 3-min setting: whole-second names drift by up to 2 s.
+    assert gaps_of(
+        probed("20261017130506_0000205F.MP4", 180.0),
+        probed("20261017130809_0000207F.MP4", 180.0),  # 183 s later
+        probed("20261017131109_0000209F.MP4", 180.0),
+        probed("20261017131409_0000211F.MP4", 180.0),
+    ) == []
+
+
+def test_five_minute_clips_are_not_flagged_at_default_threshold():
+    # Start-to-start is 300-302 s; end-to-start is ~0 s (FR-3.4b).
+    assert gaps_of(
+        probed("20261017080000_0000001F.MP4", 300.0),
+        probed("20261017080501_0000003F.MP4", 300.0),
+        probed("20261017081002_0000005F.MP4", 300.0),
+        probed("20261017081502_0000007F.MP4", 300.0),
+    ) == []
+
+
+def test_short_last_clip_before_a_break():
+    # The last clip of a drive stops with the engine: 8 s, not 180 s.
+    a = probed("20261014075736_0000015F.MP4", 180.0)
+    b = probed("20261014080036_0000017F.MP4", 8.32)
+    c = probed("20261014154240_0000019F.MP4", 180.0)
+    gaps = gaps_of(a, b, c)
+    assert len(gaps) == 1
+    assert gaps[0][0] is b and gaps[0][1] is c
+    assert gaps[0][2] == pytest.approx(27715.68)
+
+
+def test_clip_length_changed_between_drives():
+    # 1-min clips, a 1 h stop, then 3-min clips: only the stop is a gap.
+    gaps = gaps_of(
+        probed("20261013070000_0000001F.MP4", 60.0),
+        probed("20261013070100_0000003F.MP4", 60.0),
+        probed("20261013080200_0000005F.MP4", 180.0),
+        probed("20261013080500_0000007F.MP4", 180.0),
+    )
+    assert [round(g[2]) for g in gaps] == [3600]
 
 
 def test_gaps_not_detected_for_mtime_ordering():

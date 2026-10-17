@@ -20,6 +20,7 @@ from .core.pipeline import (
     UsageError,
 )
 from .core.progress import CallbackSink, ProgressEvent, describe
+from .core.report import build_plan_summary
 
 log = logging.getLogger("dashcam_merger.cli")
 
@@ -28,6 +29,37 @@ EXIT_FAIL = 1
 EXIT_USAGE = 2
 EXIT_NO_INPUT = 3
 EXIT_CANCELLED = 130
+
+
+def _positive_minutes(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError("must be more than 0")
+    return value
+
+
+def parse_trips(text: str) -> set[int]:
+    """'1,3,5-7' -> {1, 3, 5, 6, 7} (FR-3.6)."""
+    trips: set[int] = set()
+    for item in text.replace(" ", "").split(","):
+        if not item:
+            continue
+        try:
+            if "-" in item:
+                low, high = (int(x) for x in item.split("-", 1))
+                if low > high:
+                    raise ValueError
+                trips.update(range(low, high + 1))
+            else:
+                trips.add(int(item))
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"not a trip number or range: {item}") from None
+    if not trips or min(trips) < 1:
+        raise argparse.ArgumentTypeError("trip numbers start at 1, e.g. --trips 1,3,5-7")
+    return trips
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,7 +72,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     parser.add_argument("--no-recursive", action="store_true", help="do not scan subfolders")
     parser.add_argument("--camera-map", help='e.g. "F=Front,R=Rear"')
-    parser.add_argument("--split-on-gap", action="store_true", help="one file per trip")
+    trips = parser.add_mutually_exclusive_group()
+    trips.add_argument(
+        "--split-on-gap", dest="split_on_gap", action="store_const", const=True,
+        help="one file per trip (default from config.json: on)",
+    )
+    trips.add_argument(
+        "--no-split-on-gap", dest="split_on_gap", action="store_const", const=False,
+        help="one file per camera, however long the breaks",
+    )
+    parser.add_argument(
+        "--trip-gap-minutes", type=_positive_minutes, metavar="N",
+        help="a break longer than N minutes starts a new trip (default 15, config.json)",
+    )
+    parser.add_argument(
+        "--trips", type=parse_trips, metavar="LIST",
+        help="export only these trips, e.g. 2 or 1,3,5-7 (see the plan / --dry-run)",
+    )
     parser.add_argument("--max-part-gb", type=float, help="split outputs at N GB (0 = unlimited)")
     parser.add_argument("--reencode", action="store_true", help="re-encode mixed formats (slow)")
     parser.add_argument("--overwrite", action="store_true", help="replace existing outputs")
@@ -124,6 +172,8 @@ def _make_printer():
         if state["in_progress"]:
             print()
             state["in_progress"] = False
+        if ev.kind == "dry_run" and ev.plan is not None:
+            print(build_plan_summary(ev.plan))
         if ev.kind == "dry_run" and ev.commands:
             print("Commands that would run:")
             for cmd in ev.commands:
@@ -144,7 +194,9 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         output_dir=args.output,
         recursive=not args.no_recursive,
         camera_map=parse_camera_map_arg(args.camera_map) if args.camera_map else None,
-        split_on_gap=True if args.split_on_gap else None,
+        split_on_gap=args.split_on_gap,
+        trip_gap_minutes=args.trip_gap_minutes,
+        trips=args.trips,
         max_part_gb=args.max_part_gb,
         reencode=args.reencode,
         overwrite=args.overwrite,

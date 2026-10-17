@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from pathlib import Path
 
-from .models import MergePlan, RunReport
+from .models import MergePlan, OutputPart, RunReport
 from .safe_io import WriteGuard
 
 log = logging.getLogger("dashcam_merger.report")
@@ -80,6 +81,8 @@ def build_report_text(report: RunReport) -> str:
             )
         )
 
+    if plan.not_selected:
+        lines.append(_not_selected_line(plan))
     lines.append(
         f"Unclassified: {len(plan.unclassified)}   "
         f"Skipped unreadable: {len(plan.unreadable)}   "
@@ -115,6 +118,47 @@ def build_report_text(report: RunReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def part_label(part: OutputPart) -> str:
+    """'trip 2/9', 'trip 2/9 part 1/2', 'part 1/2' or '' for a single file (FR-3.5)."""
+    label = f"trip {part.trip_index}/{part.trip_count}" if part.trip_count > 1 else ""
+    if part.trip_parts > 1:
+        label = f"{label} part {part.trip_part}/{part.trip_parts}".strip()
+    return label
+
+
+def part_span(part: OutputPart) -> tuple[str, str]:
+    """Recording start and end of a part; the end drops the date when it is the same day."""
+    first, last = part.clips[0], part.clips[-1]
+    if first.timestamp is None or last.timestamp is None:
+        return "-", "-"
+    stop = last.timestamp + timedelta(seconds=last.probe.duration if last.probe else 0.0)
+    end_format = "%H:%M:%S" if stop.date() == first.timestamp.date() else "%Y-%m-%d %H:%M:%S"
+    return first.timestamp.strftime("%Y-%m-%d %H:%M:%S"), stop.strftime(end_format)
+
+
+def _part_lines(plan: MergePlan) -> list[str]:
+    """One line per output file, so trips can be checked before merging."""
+    lines: list[str] = []
+    for part in plan.parts:
+        start, end = part_span(part)
+        label = part_label(part)
+        lines.append(
+            f"  {part.camera}{' ' + label if label else ''}: {start} - {end}, "
+            f"{len(part.clips)} files, {format_duration(part.expected_duration)}, "
+            f"{format_size(part.expected_size)}"
+        )
+    return lines
+
+
+def _not_selected_line(plan: MergePlan) -> str:
+    """'Not selected (not exported): 2 of 4 files - Front trip 1/2, Rear trip 1/2'."""
+    total = len(plan.parts) + len(plan.not_selected)
+    names = ", ".join(
+        f"{p.camera}{' ' + part_label(p) if part_label(p) else ''}" for p in plan.not_selected
+    )
+    return f"Not selected (not exported): {len(plan.not_selected)} of {total} files - {names}"
+
+
 def build_plan_summary(plan: MergePlan) -> str:
     """Confirmation text shown before anything is written (FR-2.4)."""
     lines: list[str] = []
@@ -124,6 +168,9 @@ def build_plan_summary(plan: MergePlan) -> str:
     lines.append(f"Unclassified: {len(plan.unclassified)}")
     lines.append(f"Unreadable: {len(plan.unreadable)}")
     lines.append(f"Parts to write: {len(plan.parts)}")
+    lines.extend(_part_lines(plan))
+    if plan.not_selected:
+        lines.append(_not_selected_line(plan))
     lines.append(f"Output folder: {plan.output_dir}")
     if plan.warnings:
         lines.append("Warnings:")

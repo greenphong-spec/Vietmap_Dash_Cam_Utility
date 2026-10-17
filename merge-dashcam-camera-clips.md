@@ -1,13 +1,13 @@
 ---
 name: merge-dashcam-camera-clips
-description: Merge segmented multi-camera dashcam footage (Xforce, Vietmap, and similar brands) into one continuous video per camera. Use when the user has a folder of short dashcam video segments (e.g. 1-minute clips) from front/rear/side cameras and wants them combined into a single timeline per camera, in the correct chronological order.
+description: Merge segmented multi-camera dashcam footage (Xforce, Vietmap, and similar brands) into one continuous video per camera. Use when the user has a folder of short dashcam video segments (e.g. 1-, 3- or 5-minute clips) from front/rear/side cameras and wants them combined into a single timeline per camera, in the correct chronological order.
 ---
 
 # Merge dashcam camera clips
 
 ## Trigger
 
-User has a folder of dashcam video segments (typically 1 minute each) recorded by a
+User has a folder of dashcam video segments (typically 1, 3 or 5 minutes each) recorded by a
 multi-channel dashcam (Xforce, Vietmap, 70mai, etc.) and wants the clips from each
 camera (front / rear / interior) combined into one continuous video per camera, in
 the correct time order. Also trigger if they ask to "merge", "combine", "stitch",

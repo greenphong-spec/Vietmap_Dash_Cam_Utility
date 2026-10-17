@@ -18,8 +18,8 @@ DEFAULTS: dict[str, Any] = {
     "output_subfolder": "merged",
     "probe_sample_every": 20,
     "gap_warning_seconds": 300,
-    "gap_split_seconds": 1800,
-    "split_on_gap": False,
+    "gap_split_seconds": 900,
+    "split_on_gap": True,
     "max_part_gb": 0,
     "parallel_jobs": 1,
     "ffmpeg_path": "ffmpeg\\ffmpeg.exe",
@@ -85,6 +85,30 @@ def _need_int(data: dict[str, Any], key: str, minimum: int, maximum: int | None 
         upper = f" and at most {maximum}" if maximum is not None else ""
         raise ConfigError(f"{key}: must be at least {minimum}{upper}")
     return value
+
+
+def save_settings(path: Path, updates: dict[str, Any]) -> None:
+    """Change a few keys of config.json and keep everything else (GUI settings, FR-10.3).
+
+    Only known keys are accepted. The write goes through a WriteGuard limited to the
+    folder of config.json (FR-8).
+    """
+    from .safe_io import WriteGuard  # local: loading a config needs no write access
+
+    for key in updates:
+        if key not in DEFAULTS:
+            raise ConfigError(f"{key}: unknown setting")
+    raw: dict[str, Any] = dict(DEFAULTS)
+    if path.is_file():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"config.json line {e.lineno}: {e.msg}") from e
+        if not isinstance(raw, dict):
+            raise ConfigError("config.json: top level must be an object")
+    raw.update(updates)
+    WriteGuard([path.parent]).write_text(path, json.dumps(raw, indent=2) + "\n")
+    log.info("config.json updated: %s", ", ".join(f"{k}={v}" for k, v in updates.items()))
 
 
 def load_config(path: Path | None = None) -> AppConfig:

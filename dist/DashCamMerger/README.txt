@@ -3,7 +3,8 @@ DashCam Merger 1.0.0
 
 What it does
 ------------
-Your dashcam records in short clips - usually one file per minute, per camera.
+Your dashcam records in short clips - one file every 1, 3 or 5 minutes
+(a setting on the camera), per camera.
 DashCam Merger joins them back into ONE video per camera (Front, Rear,
 Interior), in the right order, without re-encoding. A two-hour trip becomes two
 files instead of two hundred.
@@ -44,7 +45,9 @@ Useful options:
     --output FOLDER        write somewhere else (default: <input>\merged)
     --dry-run              show the plan and the exact ffmpeg commands, write nothing
     --camera-map "F=Front,R=Rear"    say which suffix is which camera
-    --split-on-gap         start a new file for each trip
+    --no-split-on-gap      one file per camera instead of one per trip
+    --trip-gap-minutes 20  a break longer than 20 min starts a new trip (default 15)
+    --trips 2,5-7          export only trips 2, 5, 6 and 7 (see --dry-run for numbers)
     --max-part-gb 4        split outputs at 4 GB (handy for FAT32 USB sticks)
     --reencode             re-encode when clip formats differ (slow, not lossless)
     --overwrite            replace previous outputs (the old one is renamed, not deleted)

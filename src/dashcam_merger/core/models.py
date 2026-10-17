@@ -86,6 +86,10 @@ class OutputPart:
     expected_duration: float = 0.0
     expected_size: int = 0
     split_reason: str = ""  # "", "codec change", "trip gap", "max part size"
+    trip_index: int = 1  # 1-based trip of this camera (FR-3.5)
+    trip_count: int = 1  # trips for this camera
+    trip_part: int = 1  # 1-based part within the trip (codec change / max part size)
+    trip_parts: int = 1  # parts in this trip
 
 
 @dataclass(slots=True)
@@ -98,6 +102,7 @@ class MergePlan:
     unreadable: list[ClipInfo]
     warnings: list[str]  # human readable (FR-2.4, FR-3.3, FR-3.4)
     ffmpeg_commands: list[list[str]] = field(default_factory=list)  # for --dry-run
+    not_selected: list[OutputPart] = field(default_factory=list)  # FR-3.6, not exported
 
 
 @dataclass(slots=True)
@@ -172,6 +177,10 @@ class RunOptions:  # everything the CLI/GUI can set per run
     recursive: bool = True
     camera_map: dict[str, CameraLabel] | None = None  # FR-2.3
     split_on_gap: bool | None = None  # None -> config value
+    trip_gap_minutes: float | None = None  # None -> config gap_split_seconds (FR-3.5)
+    # FR-3.6 export selection; None = everything. Both given -> a part must match both.
+    trips: set[int] | None = None  # trip numbers (CLI --trips), all cameras
+    selected_parts: set[str] | None = None  # planner.part_key() values (GUI checkboxes)
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False

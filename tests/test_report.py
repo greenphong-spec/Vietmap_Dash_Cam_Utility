@@ -168,3 +168,42 @@ def test_write_report_lands_in_output_folder(tmp_path):
     path = write_report(guard, tmp_path, "hello\n")
     assert path.name == REPORT_FILENAME
     assert path.read_text(encoding="utf-8") == "hello\n"
+
+
+def test_plan_summary_lists_each_trip():
+    from datetime import datetime
+
+    from dashcam_merger.core.models import ProbeResult
+
+    def clip(stamp: str, seconds: float) -> ClipInfo:
+        c = ClipInfo(path=Path(f"C:/x/{stamp}_0000001F.MP4"), size_bytes=1024**2, mtime=0.0)
+        c.timestamp = datetime.strptime(stamp, "%Y%m%d%H%M%S")
+        c.probe = ProbeResult(seconds, 1024**2, None)
+        return c
+
+    trip1 = OutputPart("Front", 1, 2, [clip("20261014075736", 180), clip("20261014080036", 8)],
+                       None, False, expected_duration=188, expected_size=2 * 1024**2,
+                       trip_index=1, trip_count=2)
+    trip2 = OutputPart("Front", 2, 2, [clip("20261014235900", 180)], None, False,
+                       expected_duration=180, expected_size=1024**2, split_reason="trip gap",
+                       trip_index=2, trip_count=2)
+    plan = MergePlan(Path("D:/in"), OUT, [], [trip1, trip2], [], [], [])
+    summary = build_plan_summary(plan)
+    assert "  Front trip 1/2: 2026-10-14 07:57:36 - 08:00:44, 2 files, 0:03:08, 2.0 MB" in summary
+    assert "  Front trip 2/2: 2026-10-14 23:59:00 - 2026-10-15 00:02:00, 1 files" in summary
+
+
+def test_not_selected_listed_in_summary_and_report():
+    from dashcam_merger.core.models import ProbeResult
+
+    def part(camera, trip):
+        c = ClipInfo(path=Path(f"C:/x/{camera}{trip}.MP4"), size_bytes=1, mtime=0.0)
+        c.probe = ProbeResult(1.0, 1, None)
+        return OutputPart(camera, trip, 2, [c], None, False, trip_index=trip, trip_count=2)
+
+    plan = MergePlan(Path("D:/in"), OUT, [], [part("Front", 2)], [], [], [],
+                     not_selected=[part("Front", 1), part("Rear", 1)])
+    line = "Not selected (not exported): 2 of 3 files - Front trip 1/2, Rear trip 1/2"
+    assert line in build_plan_summary(plan)
+    report = RunReport("r", plan, [], True, None, None)
+    assert line in build_report_text(report)

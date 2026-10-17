@@ -35,6 +35,7 @@ def test_parser_defaults():
     assert opt.recursive is True
     assert opt.dry_run is False and opt.assume_yes is False
     assert opt.camera_map is None and opt.split_on_gap is None
+    assert opt.trip_gap_minutes is None  # config.json decides
 
 
 def test_parser_all_flags():
@@ -143,3 +144,35 @@ def test_missing_input_folder_is_usage_error(cfg_with_fake_tools, tmp_path):
     opt = RunOptions(input_dir=tmp_path / "does_not_exist")
     with pytest.raises(UsageError):
         run(cfg_with_fake_tools, opt, AutoConfirmer(), NullSink(), threading.Event())
+
+
+def test_no_split_on_gap_and_trip_gap_minutes():
+    opt = parse(["--input", "D:/x", "--no-split-on-gap", "--trip-gap-minutes", "20"])
+    assert opt.split_on_gap is False and opt.trip_gap_minutes == 20.0
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "abc"])
+def test_trip_gap_minutes_must_be_positive(value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--input", "D:/x", "--trip-gap-minutes", value])
+
+
+def test_split_and_no_split_are_exclusive():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--input", "D:/x", "--split-on-gap", "--no-split-on-gap"])
+
+
+def test_trips_parsed():
+    from dashcam_merger.cli import parse_trips
+
+    assert parse_trips("2") == {2}
+    assert parse_trips("1,3,5-7") == {1, 3, 5, 6, 7}
+    assert parse_trips(" 4 , 2 ") == {2, 4}
+    assert parse(["--input", "D:/x", "--trips", "1,3"]).trips == {1, 3}
+    assert parse(["--input", "D:/x"]).trips is None
+
+
+@pytest.mark.parametrize("value", ["0", "a", "3-1", "", "1,-2", "2-x"])
+def test_bad_trips_rejected(value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--input", "D:/x", "--trips", value])

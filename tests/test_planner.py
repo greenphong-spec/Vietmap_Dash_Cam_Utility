@@ -122,9 +122,67 @@ def test_split_on_gap_splits_at_forty_minute_gap(env):
 
 def test_gap_warning_without_split(env):
     clips = [make_clip(0), make_clip(1, minutes=20)]
-    plan = plan_for(clips, env)
+    plan = plan_for(clips, env, split_on_gap=False)
     assert len(plan.parts) == 1
     assert any("gap of" in w for w in plan.warnings)
+
+
+# ---- trips (FR-3.5): split on by default, new trip after a break > 15 min
+def trip_clips():
+    # 0-2 | 19 min break | 22-23 | 14 min break | 38-39   (60 s clips)
+    return [make_clip(0), make_clip(1), make_clip(2, minutes=22), make_clip(3, minutes=23),
+            make_clip(4, minutes=38), make_clip(5, minutes=39)]
+
+
+def test_trips_by_default_after_more_than_fifteen_minutes(env):
+    plan = plan_for(trip_clips(), env)
+    assert [len(p.clips) for p in plan.parts] == [2, 4]  # 19 min splits, 14 min does not
+    assert [p.split_reason for p in plan.parts] == ["", "trip gap"]
+    assert [(p.trip_index, p.trip_count) for p in plan.parts] == [(1, 2), (2, 2)]
+
+
+def test_trip_gap_minutes_from_run_options(env):
+    assert len(plan_for(trip_clips(), env, trip_gap_minutes=10).parts) == 3
+    assert len(plan_for(trip_clips(), env, trip_gap_minutes=30).parts) == 1
+
+
+def test_trip_gap_from_config(env):
+    cfg = env[0]
+    cfg.gap_split_seconds = 600
+    assert len(plan_for(trip_clips(), env).parts) == 3
+
+
+def test_trip_gap_below_gap_warning_still_splits(env):
+    # A 3-min trip gap must work although gaps under 5 min are not warned about.
+    clips = [make_clip(0), make_clip(1, minutes=5)]
+    assert len(plan_for(clips, env, trip_gap_minutes=3).parts) == 2
+
+
+def test_split_on_gap_off_keeps_one_file(env):
+    assert len(plan_for(trip_clips(), env, split_on_gap=False).parts) == 1
+
+
+def test_trip_gap_uses_probed_duration_not_start_times(env):
+    # 5-min clips 5 min apart: 0 s break, never a trip even with a 1-min trip gap.
+    clips = [make_clip(i, minutes=5 * i) for i in range(4)]
+    for c in clips:
+        c.probe = ProbeResult(300.0, 1000, SIG_A)
+    assert len(plan_for(clips, env, trip_gap_minutes=1).parts) == 1
+
+
+def test_trip_names(env):
+    plan = plan_for(trip_clips(), env)
+    assert plan.parts[0].output_path.name == "Front_20260831152516_to_20260831152616_trip1.mp4"
+    assert plan.parts[1].output_path.name == "Front_20260831154716_to_20260831160416_trip2.mp4"
+
+
+def test_codec_change_inside_a_trip_numbers_parts_per_trip(env):
+    clips = trip_clips()
+    clips[5].probe = ProbeResult(60.0, 1000, SIG_B)
+    names = [p.output_path.name for p in plan_for(clips, env).parts]
+    assert [n.rsplit("_", 2)[-2:] for n in names] == [
+        ["20260831152616", "trip1.mp4"], ["trip2", "part1.mp4"], ["trip2", "part2.mp4"],
+    ]
 
 
 def test_output_name_follows_fr_6_3(env):
@@ -197,3 +255,46 @@ def test_name_falls_back_to_stem_without_timestamp(env):
         c.timestamp = None
     plan = plan_for(clips, env)
     assert plan.parts[0].output_path.name.startswith("Front_2026")  # stem still carries digits
+
+
+def test_trip_borders_are_not_warned_about_but_stops_inside_are(env):
+    plan = plan_for(trip_clips(), env)  # 19 min -> trip border, 14 min -> stop in trip 2
+    gaps = [w for w in plan.warnings if "gap of" in w]
+    assert len(gaps) == 1 and "14.0 min" in gaps[0]
+    assert not any("trip gap" in w for w in plan.warnings)
+
+
+
+# ---- export selection (FR-3.6)
+def front_and_rear_trips():
+    return trip_clips() + [make_clip(i, camera="Rear", minutes=m)
+                           for i, m in zip(range(10, 16), (0, 1, 22, 23, 38, 39))]
+
+
+def test_select_trips_keeps_both_cameras_and_full_numbering(env):
+    plan = plan_for(front_and_rear_trips(), env, trips={2})
+    assert [(p.camera, p.trip_index) for p in plan.parts] == [("Front", 2), ("Rear", 2)]
+    assert [p.output_path.name.endswith("_trip2.mp4") for p in plan.parts] == [True, True]
+    assert [(p.camera, p.trip_index) for p in plan.not_selected] == [("Front", 1), ("Rear", 1)]
+    assert len(plan.ffmpeg_commands) == 2
+
+
+def test_missing_trip_number_is_warned(env):
+    plan = plan_for(trip_clips(), env, trips={2, 7})
+    assert len(plan.parts) == 1
+    assert any("trip(s) 7 do not exist (trips 1-2)" in w for w in plan.warnings)
+
+
+def test_select_parts_by_key(env):
+    from dashcam_merger.core.planner import part_key
+
+    everything = plan_for(front_and_rear_trips(), env)
+    keep = {part_key(everything.parts[0]), part_key(everything.parts[3])}
+    plan = plan_for(front_and_rear_trips(), env, selected_parts=keep)
+    assert {part_key(p) for p in plan.parts} == keep
+    assert len(plan.not_selected) == 2
+
+
+def test_no_selection_exports_everything(env):
+    plan = plan_for(front_and_rear_trips(), env)
+    assert len(plan.parts) == 4 and plan.not_selected == []
