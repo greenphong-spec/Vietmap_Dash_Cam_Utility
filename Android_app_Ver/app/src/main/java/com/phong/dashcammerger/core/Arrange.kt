@@ -10,12 +10,11 @@ object Arrange {
     /** First clip's timestamp, or null when the naming carries no time. */
     fun start(part: OutputPart): LocalDateTime? = part.clips.first().timestamp
 
-    /** Last clip's timestamp plus its probed duration (60 s if unknown). */
+    /** Last clip's timestamp plus its probed duration (no length assumed if unknown, FR-3.4a). */
     fun end(part: OutputPart): LocalDateTime? {
         val last = part.clips.last()
         val ts = last.timestamp ?: return null
-        val us = last.probe?.durationUs?.takeIf { it > 0 } ?: 60_000_000L
-        return ts.plusNanos(us * 1000)
+        return ts.plusNanos((last.probe?.durationUs ?: 0L) * 1000)
     }
 
     /** Plan order: grouped by camera (Front, Rear, Interior), parts in time order. */

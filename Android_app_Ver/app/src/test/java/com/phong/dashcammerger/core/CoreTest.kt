@@ -178,4 +178,104 @@ class CoreTest {
         assertEquals("1:01:05", Report.formatDuration(3_665_000_000))
         assertEquals("1.50 GB", Report.formatSize(1024L * 1024 * 1024 * 3 / 2))
     }
+
+    // ---- clip length 1 / 3 / 5 min (FR-3.4a) and trips (FR-3.5), synced with the PC app
+
+    private fun gapsOf(vararg clips: ClipInfo, warn: Int = 300): List<Gap> {
+        val group = CameraGroup(Camera.Front, clips.toMutableList())
+        Ordering.annotate(group.clips)
+        Ordering.orderGroup(group)
+        Ordering.detectGaps(group, warn)
+        return group.gaps
+    }
+
+    @Test
+    fun threeAndFiveMinuteClipsWithNameJitterHaveNoGap() {
+        assertTrue(gapsOf(
+            probed(clip("20261017130506_0205F.mp4"), seconds = 180),
+            probed(clip("20261017130809_0207F.mp4"), seconds = 180),
+            probed(clip("20261017131109_0209F.mp4"), seconds = 180),
+        ).isEmpty())
+        assertTrue(gapsOf(
+            probed(clip("20261017080000_0001F.mp4"), seconds = 300),
+            probed(clip("20261017080501_0003F.mp4"), seconds = 300),
+            probed(clip("20261017081002_0005F.mp4"), seconds = 300),
+        ).isEmpty())
+    }
+
+    @Test
+    fun unprobedClipLengthIsNotAssumed() {
+        assertTrue(gapsOf(clip("20260831152500_0001F.mp4"), clip("20261001080000_0002F.mp4"), warn = 1).isEmpty())
+        val part = OutputPart(Camera.Front, 1, 1, listOf(clip("20261014080036_0017F.mp4").also {
+            it.timestamp = LocalDateTime.of(2026, 10, 14, 8, 0, 36)
+        }), "", 0, 0)
+        assertEquals(LocalDateTime.of(2026, 10, 14, 8, 0, 36), Arrange.end(part))
+    }
+
+    @Test
+    fun shortLastClipBeforeABreak() {
+        val gaps = gapsOf(
+            probed(clip("20261014075736_0015F.mp4"), seconds = 180),
+            clip("20261014080036_0017F.mp4").also { it.probe = ProbeInfo(8_320_000, sig, "H.264") },
+            probed(clip("20261014154240_0019F.mp4"), seconds = 180),
+        )
+        assertEquals(1, gaps.size)
+        assertEquals(27715.68, gaps[0].seconds, 0.001)
+    }
+
+    /** 60 s clips: 0-1 | 19 min break | 22-23 | 14 min break | 38-39, Front only. */
+    private fun tripClips(): List<ClipInfo> =
+        listOf("152500_0001", "152600_0002", "154700_0003", "154800_0004", "160300_0005", "160400_0006")
+            .map { clip("20260831${it}F.mp4") }
+
+    private fun plan(clips: List<ClipInfo>, opt: PlanOptions = PlanOptions(), probe: (ClipInfo) -> Unit = { probed(it) }): MergePlan {
+        Cameras.detect(clips)
+        return Planner.buildPlan(clips, opt, probe = probe, nameExists = { false })
+    }
+
+    @Test
+    fun tripsByDefaultAfterMoreThanFifteenMinutes() {
+        val p = plan(tripClips())
+        assertEquals(listOf(2, 4), p.parts.map { it.clips.size })
+        assertEquals(listOf(1 to 2, 2 to 2), p.parts.map { it.tripIndex to it.tripCount })
+        assertEquals("Front_20260831_152500_to_20260831_152600_trip1.mp4", p.parts[0].outputName)
+        assertEquals("Front_20260831_154700_to_20260831_160400_trip2.mp4", p.parts[1].outputName)
+        // Trip borders are not repeated as gap warnings; the 14-min stop inside trip 2 is.
+        assertEquals(listOf("Front: gap of 14.0 min between 20260831154800_0004F.mp4 and 20260831160300_0005F.mp4"), p.warnings)
+    }
+
+    @Test
+    fun tripGapIsConfigurableAndCanBeTurnedOff() {
+        assertEquals(3, plan(tripClips(), PlanOptions(gapSplitSeconds = 600)).parts.size)
+        assertEquals(1, plan(tripClips(), PlanOptions(gapSplitSeconds = 1800)).parts.size)
+        assertEquals(1, plan(tripClips(), PlanOptions(splitOnGap = false)).parts.size)
+        // A 3-min trip gap splits although gaps under 5 min are not warned about.
+        val clips = listOf(clip("20260831152500_0001F.mp4"), clip("20260831153000_0002F.mp4"))
+        assertEquals(2, plan(clips, PlanOptions(gapSplitSeconds = 180)).parts.size)
+    }
+
+    @Test
+    fun fiveMinuteClipsNeverStartATrip() {
+        val clips = (0..3).map { clip("20261017%02d%02d00_000${it}F.mp4".format(8 + it * 5 / 60, (it * 5) % 60)) }
+        assertEquals(1, plan(clips, PlanOptions(gapSplitSeconds = 60), probe = { probed(it, seconds = 300) }).parts.size)
+    }
+
+    @Test
+    fun codecChangeInsideATripNumbersPartsPerTrip() {
+        val other = StreamSignature("video/hevc 3840x2160", "none")
+        val p = plan(tripClips(), probe = { probed(it, if (it.name.contains("0006")) other else sig) })
+        assertEquals(
+            listOf("_trip1.mp4", "_trip2_part1.mp4", "_trip2_part2.mp4"),
+            p.parts.map { it.outputName.substring(it.outputName.indexOf("_trip")) },
+        )
+        assertEquals(listOf("trip 1/2", "trip 2/2 part 1/2", "trip 2/2 part 2/2"), p.parts.map { Report.partLabel(it) })
+    }
+
+    @Test
+    fun planSummaryListsTripsWithTimes() {
+        val text = Report.planSummary(plan(tripClips()), "out")
+        assertTrue("  Front trip 1/2: 2026-08-31 15:25:00 - 15:27:00, 2 clips, 0:02:00" in text)
+        assertTrue("    Front_20260831_154700_to_20260831_160400_trip2.mp4" in text)
+        assertEquals("", Report.partLabel(plan(tripClips(), PlanOptions(splitOnGap = false)).parts.single()))
+    }
 }

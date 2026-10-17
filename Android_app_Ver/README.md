@@ -28,10 +28,12 @@ from the repo root after editing the `.md`).
 | `config.json`, custom camera profiles, re-encode, parallel jobs | Not included; built-in camera profiles + manual camera mapping screen |
 
 Kept identical: camera profiles and 90 % detection threshold (FR-2), ordering by
-timestamp → sequence → mtime with warnings (FR-3), gap warnings / optional split at
-30 min gaps (FR-3.4/3.5), split on codec change (FR-4.4), unreadable-file skipping
-(FR-4.5), output naming `Front_<first>_to_<last>[_partN].mp4` with `_2`, `_3` on
-collisions (FR-6.2/6.3), `.partial.mp4` → final rename only after verification, failed
+timestamp → sequence → mtime with warnings (FR-3), gaps measured end-to-start from the
+probed clip length — 1-, 3- and 5-minute clips all work, no length is assumed (FR-3.4a),
+**trips**: one file per trip, on by default, a new trip after a break of more than
+15 min (set on the Setup tab) (FR-3.5), split on codec change (FR-4.4), unreadable-file
+skipping (FR-4.5), output naming `Front_<first>_to_<last>[_tripN][_partM].mp4` with
+`_2`, `_3` on collisions (FR-6.2/6.3), `.partial.mp4` → final rename only after verification, failed
 or cancelled outputs kept as `INCOMPLETE_DO_NOT_USE_*` (FR-6.5), duration within
 max(1 s, 0.1 %) and size ≥ 90 % verification (FR-7), source-unchanged check (FR-7.6).
 
@@ -48,14 +50,17 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    SD card from the ☰ menu). Access is remembered.
 2. Optionally **Choose output folder** — e.g. *Phone → Movies → DashMerged* to copy the
    merged result off the SD card. Leave unset to write to `<input>/merged`.
+   **Split into trips** (on by default) writes one file per trip; a break of more than
+   **15 min** (change it in the box next to it) starts a new trip.
 3. **Scan & plan** — shows each camera, clip count, codec, the files that will be
    written, and any warnings. If the file naming isn't recognised you assign each group
    to Front/Rear/Interior/Skip.
-   Every output file has a checkbox (all ticked by default): untick the ones you don't
+   Each row shows the camera and trip (e.g. *Front trip 3/9*), its start and end time,
+   clips, length and size. Every output file has a checkbox (all ticked by default): untick the ones you don't
    want, or use **Select all** / **Select none** or a camera's header box. Only the
    ticked files are merged; the report lists the skipped ones.
-   **Order: By camera / By time** sorts the list (By time puts each trip's Front and
-   Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
+   **Order: By time / By camera** sorts the list (By time, the default, puts each trip's
+   Front and Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
    **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
    file from the same time.
 4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on while merging (large merges take a few

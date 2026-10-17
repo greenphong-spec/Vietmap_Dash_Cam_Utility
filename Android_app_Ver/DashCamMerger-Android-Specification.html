@@ -81,7 +81,7 @@ li{margin:3px 0}
 <tbody>
 <tr>
 <td>Document version</td>
-<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3)</td>
+<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after &gt; 15 min, configurable, AR-6.1/6.3/6.5)</td>
 </tr>
 <tr>
 <td>App version</td>
@@ -109,7 +109,8 @@ desktop requirement the desktop ID is given as <code>(FR-x)</code>.</p>
 <hr />
 <h2 id="1-purpose-and-scope">1. Purpose and scope</h2>
 <h3 id="11-problem">1.1 Problem</h3>
-<p>Dashcams (Vietmap, Xforce, 70mai, …) record 1-minute clips per camera, e.g.
+<p>Dashcams (Vietmap, Xforce, 70mai, …) record 1-, 3- or 5-minute clips per camera (a camera
+setting), e.g.
 <code>20260924070830_0001446F.MP4</code> (Front) and <code>20260924070830_0001447R.MP4</code> (Rear). Watching a
 trip means opening dozens of files. The desktop tool (Windows, Python + ffmpeg) joins them;
 this app does the same <strong>on the phone</strong>, directly from the dashcam's SD card (or a card
@@ -380,9 +381,12 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
      <code>&lt;Camera&gt;: order based on sequence number in filename</code>;</li>
 <li>else → by (mtime, lower-case name), warning
      <code>&lt;Camera&gt;: order based on file modification time, please spot-check</code> (FR-3.3).</li>
-<li><strong>AR-4.3</strong> Gaps (FR-3.4), only for timestamp-ordered groups: for consecutive clips A, B:
-  <code>gap = (B.timestamp − A.timestamp in whole seconds) − A.duration</code>, where A.duration is
-  the probed duration, or 60 s if unknown. A gap <strong>&gt; 300 s</strong> produces the warning
+<li><strong>AR-4.3</strong> Gaps (FR-3.4, FR-3.4a), only for timestamp-ordered groups: for consecutive
+  clips A, B: <code>gap = (B.timestamp − A.timestamp in whole seconds) − A.duration</code> — end of A
+  to start of B, never start-to-start (5-min clips are 300–302 s apart). A.duration is the
+  probed duration; <strong>no clip length is assumed</strong> (<code>Ordering.gapSeconds</code> returns null and the
+  pair is skipped when it is unknown). A gap <strong>&gt; 300 s</strong> that does not start a new trip
+  (AR-6.1 rule 2) produces the warning
   <code>&lt;Camera&gt;: gap of &lt;minutes, 1 decimal&gt; min between &lt;A name&gt; and &lt;B name&gt;</code>.</li>
 </ul>
 <h3 id="35-probing-fr-4">3.5 Probing (FR-4)</h3>
@@ -420,18 +424,30 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
   (checked in this priority order):</li>
 <li>C's signature differs from the current part's signature → reason <code>codec change</code>
      (FR-4.4);</li>
-<li>option <em>trip gap</em> is on and the gap before C is <strong>&gt; 1800 s</strong> → <code>trip gap</code> (FR-3.5);</li>
+<li>option <em>Split into trips</em> is on (default <strong>on</strong>), the group is timestamp-ordered, and
+     the gap before C (AR-4.3, computed directly, independent of the 300 s warning
+     threshold) is <strong>&gt; the trip gap</strong> (default <strong>15 min</strong> = 900 s, set on the Setup tab)
+     → <code>trip gap</code> (FR-3.5);</li>
 <li>option <em>3.9 GB</em> is on and current part bytes + C's size &gt; 3.9 × 1024³ bytes →
      <code>max part size</code> (FR-6.8).</li>
 </ul>
-<p>Each split adds the warning <code>&lt;Camera&gt; part &lt;n&gt;: new part started because of &lt;reason&gt;</code>.
+<p>A <strong>trip</strong> is the run of parts between two <code>trip gap</code> splits. <code>Planner.numberTrips</code>
+  gives every part <code>tripIndex</code>/<code>tripCount</code> and <code>tripPart</code>/<code>tripParts</code> (its number within
+  the trip). Codec-change and size splits add the warning
+  <code>&lt;Camera&gt; part &lt;n&gt;: new part started because of &lt;reason&gt;</code>; trip splits add none — the
+  trip list shows them (FR-3.5e).
 - <strong>AR-6.2</strong> Expected duration of a part = sum of its clips' probed durations; expected
   size = sum of its clips' sizes.
 - <strong>AR-6.3</strong> Output name (FR-6.3):
-  <code>&lt;Camera&gt;_&lt;first&gt;_to_&lt;last&gt;.mp4</code>, with <code>_part&lt;n&gt;</code> appended to the stem when the camera
-  has more than one part. <code>&lt;first&gt;</code>/<code>&lt;last&gt;</code> are the first/last clip's timestamp as
+  <code>&lt;Camera&gt;_&lt;first&gt;_to_&lt;last&gt;.mp4</code>, with <code>_trip&lt;n&gt;</code> appended when the camera has more
+  than one trip, then <code>_part&lt;m&gt;</code> when that trip has more than one part (numbered within
+  the trip, e.g. <code>…_trip2_part1.mp4</code>, since v1.5; before: <code>_part&lt;n&gt;</code> per camera). <code>&lt;first&gt;</code>/<code>&lt;last&gt;</code> are the first/last clip's timestamp as
   <code>yyyyMMdd_HHmmss</code> (date and time separated by <code>_</code>, since v1.4), or the clip's file stem if it has no timestamp.
-  Example: <code>Front_20260924_070830_to_20260924_073130_part1.mp4</code>.
+  Example: <code>Front_20260924_070830_to_20260924_073130_trip1.mp4</code>.
+- <strong>AR-6.5</strong> Plan text (FR-3.5d): one entry per part,
+  <code>&lt;Camera&gt; trip &lt;n&gt;/&lt;N&gt;[ part &lt;m&gt;/&lt;M&gt;]: &lt;yyyy-MM-dd HH:mm:ss&gt; - &lt;HH:mm:ss&gt;, &lt;n&gt; clips,
+  H:MM:SS, &lt;size&gt;</code> (the end keeps its date when it is another day; label and times are
+  left out when unknown), followed by the output name on its own line.
 - <strong>AR-6.4</strong> Collisions (FR-6.2): if the name exists in the output folder, or was already
   given to another part in this plan, try <code>&lt;stem&gt;_2.mp4</code>, <code>&lt;stem&gt;_3.mp4</code>, … until free.
   Existing files are never overwritten.
@@ -488,17 +504,16 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 <li><strong>AR-9.1</strong> <code>merge_report.txt</code> (UTF-8, <code>\n</code>) is written into the output folder after
   every merge run (replacing an earlier report there). Format:</li>
 </ul>
-<pre><code>Front part 1: Front_20260924_070830_to_20260924_073130_part1.mp4
+<pre><code>Front trip 1/2: Front_20260924_070830_to_20260924_073130_trip1.mp4
     24 files, 0:23:07, 2.33 GB  -&gt;  PASS
-Rear part 1: Rear_20260924_070830_to_20260924_073130_part1.mp4
+Rear trip 1/2: Rear_20260924_070830_to_20260924_073130_trip1.mp4
     24 files, 0:23:07, 1.60 GB  -&gt;  PASS
 Unclassified: 0   Skipped unreadable: 0   Sources untouched: OK
 Output folder: Phone: /Movies/DashMerged
-
-Warnings:
-  Front: gap of 494.6 min between 20260924073130_0001492F.MP4 and 20260924154610_0001494F.MP4
-  Front part 2: new part started because of trip gap
 </code></pre>
+<p>The per-part label is <code>trip &lt;n&gt;/&lt;N&gt;[ part &lt;m&gt;/&lt;M&gt;]</code>, or <code>part &lt;n&gt;</code> when the camera has
+  a single trip. The 494.6 min break that separated the two trips is not a warning
+  (AR-4.3).</p>
 <p>For non-PASS parts the status is followed by <code>(&lt;reason&gt;)</code> and the file name is the
   <code>INCOMPLETE_…</code> name. A <code>Source problems:</code> section appears when AR-8.4 found any.
   When the user unticked parts (AR-10.12), the per-part lines are followed by
@@ -539,8 +554,9 @@ Free space there: 128.28 GB
 <h4 id="choosing-which-files-to-export-v11">Choosing which files to export (v1.1)</h4>
 <ul>
 <li><strong>AR-10.5 Selection list.</strong> In state <em>Planned</em>, above the plan text, a card <em>Files to
-  export</em> lists one row per planned output part: checkbox, output file name,
-  <code>&lt;n&gt; clips, H:MM:SS, &lt;size&gt;</code>, and ▲ / ▼ buttons (AR-10.17). The rows are one flat list
+  export</em> lists one row per planned output part: checkbox, <code>&lt;Camera&gt; trip &lt;n&gt;/&lt;N&gt;</code> (bold),
+  <code>&lt;start&gt; - &lt;end&gt;</code> (AR-6.5), <code>&lt;n&gt; clips, H:MM:SS, &lt;size&gt;</code>, the output file name, and
+  ▲ / ▼ buttons (AR-10.17). The rows are one flat list
   in export order (AR-10.14). Above them is one tri-state box per camera present, shown as
   <code>&lt;Camera&gt; (&lt;ticked&gt;/&lt;n&gt;)</code>, in <code>CAMERA_ORDER</code>.</li>
 <li><strong>AR-10.6 Default.</strong> Right after a successful plan every part is ticked, so tapping
@@ -574,7 +590,8 @@ Free space there: 128.28 GB
   order (the report lists results in the same order, then the skipped ones). It is
   rebuilt from the current sort mode on every new plan.</li>
 <li><strong>AR-10.15 Sort mode.</strong> Chips <strong>Order: By camera | By time</strong> (preference
-  <code>order_by_time</code>, default <em>By camera</em>). Choosing one re-sorts the list immediately and
+  <code>order_by_time</code>, default <em>By time</em> since v1.5 — Front and Rear of a trip together, as on
+  the PC). Choosing one re-sorts the list immediately and
   drops manual moves.</li>
 <li><em>By camera</em> = plan order: Front parts, then Rear, then Interior, each in time order.</li>
 <li><em>By time</em> = by part start (first clip's timestamp); same start → <code>CAMERA_ORDER</code>, so
@@ -583,7 +600,7 @@ Free space there: 128.28 GB
 <li><strong>AR-10.16 Keep Front/Rear pairs together.</strong> Switch <em>Keep Front/Rear pairs together
   (same time)</em> (preference <code>link_pairs</code>, default off). Two parts of <strong>different</strong> cameras
   are partners when their time ranges overlap: range = [first clip timestamp, last clip
-  timestamp + last clip duration (60 s if unknown)). When neither part has a timestamp,
+  timestamp + last clip duration (0 if unknown — no length is assumed)). When neither part has a timestamp,
   parts with the same part number are partners; a part with a timestamp is never paired
   with one without. With the switch on, ticking or unticking a row applies the same
   state to its partners. <em>Select all</em>, <em>Select none</em> and the camera boxes are not
@@ -614,9 +631,14 @@ Free space there: 128.28 GB
 </thead>
 <tbody>
 <tr>
-<td><code>Start a new file after a trip gap (&gt; 30 min)</code></td>
-<td>off</td>
+<td><code>Split into trips (one file per trip)</code></td>
+<td><strong>on</strong></td>
 <td>AR-6.1 rule 2</td>
+</tr>
+<tr>
+<td><code>New trip after a break of more than [N] min</code> (number field, enabled while the switch is on)</td>
+<td>15</td>
+<td>trip gap of AR-6.1 rule 2; empty / 0 → 15</td>
 </tr>
 <tr>
 <td><code>Split at 3.9 GB (FAT32 SD card / USB stick)</code></td>
@@ -625,8 +647,8 @@ Free space there: 128.28 GB
 </tr>
 </tbody>
 </table>
-<p>Fixed values: output subfolder <code>merged</code>, gap warning 300 s, gap split 1800 s, match
-threshold 90 %, default clip length 60 s.</p>
+<p>Fixed values: output subfolder <code>merged</code>, gap warning 300 s, match threshold 90 %. No
+default clip length (AR-4.3).</p>
 <hr />
 <h2 id="4-user-interface">4. User interface</h2>
 <p>Single activity, Jetpack Compose, Material 3; light/dark colour scheme follows the system;
@@ -727,7 +749,8 @@ screen keeps itself on while scanning or merging.</p>
 get <code>_2</code> names, AR-6.4).</p>
 <h3 id="44-preferences">4.4 Preferences</h3>
 <p><code>SharedPreferences</code> file <code>dashcam_merger</code>: <code>tree_uri</code> (input), <code>output_tree_uri</code>
-(output), <code>split_on_gap</code> (bool), <code>split_fat32</code> (bool), <code>order_by_time</code> (bool, AR-10.15),
+(output), <code>split_on_gap</code> (bool, default true), <code>trip_gap_minutes</code> (int, default 15),
+<code>split_fat32</code> (bool), <code>order_by_time</code> (bool, default true, AR-10.15),
 <code>link_pairs</code> (bool, AR-10.16).</p>
 <hr />
 <h2 id="5-architecture">5. Architecture</h2>
@@ -1063,6 +1086,38 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <tr>
 <td><code>selectionSummaryAndSpaceWarning</code></td>
 <td><code>Selected: 1 of 2 file(s), 0.3 KB</code>; space warning only when needed &gt; known free space</td>
+</tr>
+<tr>
+<td><code>threeAndFiveMinuteClipsWithNameJitterHaveNoGap</code></td>
+<td>180 s clips 183/180 s apart and 300 s clips 301/301 s apart → no gap (AR-4.3)</td>
+</tr>
+<tr>
+<td><code>unprobedClipLengthIsNotAssumed</code></td>
+<td>no probe → no gap even 31 days apart; <code>Arrange.end</code> = last clip's start</td>
+</tr>
+<tr>
+<td><code>shortLastClipBeforeABreak</code></td>
+<td>180 s + 8.32 s clip, next clip at 15:42:40 → one gap of 27 715.68 s</td>
+</tr>
+<tr>
+<td><code>tripsByDefaultAfterMoreThanFifteenMinutes</code></td>
+<td>19-min break splits, 14-min stop does not; <code>_trip1</code>/<code>_trip2</code> names; only the 14-min stop is a warning</td>
+</tr>
+<tr>
+<td><code>tripGapIsConfigurableAndCanBeTurnedOff</code></td>
+<td>10 min → 3 trips, 30 min → 1, switch off → 1; a 3-min trip gap splits below the 300 s warning threshold</td>
+</tr>
+<tr>
+<td><code>fiveMinuteClipsNeverStartATrip</code></td>
+<td>300 s clips 5 min apart stay one file even with a 1-min trip gap</td>
+</tr>
+<tr>
+<td><code>codecChangeInsideATripNumbersPartsPerTrip</code></td>
+<td><code>_trip1</code>, <code>_trip2_part1</code>, <code>_trip2_part2</code>; labels <code>trip 2/2 part 1/2</code></td>
+</tr>
+<tr>
+<td><code>planSummaryListsTripsWithTimes</code></td>
+<td><code>Front trip 1/2: 2026-08-31 15:25:00 - 15:27:00, 2 clips, 0:02:00</code> + output name line</td>
 </tr>
 </tbody>
 </table>

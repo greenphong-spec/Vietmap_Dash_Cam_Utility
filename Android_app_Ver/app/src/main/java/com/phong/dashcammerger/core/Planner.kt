@@ -41,21 +41,25 @@ object Planner {
     /** Walk the ordered clips and start a new part whenever a rule fires. */
     fun splitGroup(group: CameraGroup, opt: PlanOptions): List<Pair<List<ClipInfo>, String>> {
         val maxBytes = if (opt.maxPartGb > 0) opt.maxPartGb * GIB else 0.0
-        val gapAfter = group.gaps.associate { it.after to it.seconds }
+        // FR-3.5: computed here, not from group.gaps, so the trip gap is independent of the
+        // gap-warning threshold; only meaningful when the clips are ordered by time.
+        val splitOnGap = opt.splitOnGap && group.orderSource == OrderSource.Timestamp
 
         val parts = mutableListOf<Pair<List<ClipInfo>, String>>()
         var current = mutableListOf<ClipInfo>()
         var currentBytes = 0L
         var currentSig: StreamSignature? = null
         var reason = ""
+        var previous: ClipInfo? = null
 
         for (clip in group.clips) {
             var newReason = ""
             if (current.isNotEmpty()) {
                 val sig = clip.probe?.signature
+                val gap = previous?.let { Ordering.gapSeconds(it, clip) }
                 newReason = when {
                     sig != null && currentSig != null && sig != currentSig -> "codec change" // FR-4.4
-                    opt.splitOnGap && (gapAfter[clip] ?: 0.0) > opt.gapSplitSeconds -> "trip gap" // FR-3.5
+                    splitOnGap && gap != null && gap > opt.gapSplitSeconds -> "trip gap" // FR-3.5
                     maxBytes > 0 && currentBytes + clip.sizeBytes > maxBytes -> "max part size" // FR-6.8
                     else -> ""
                 }
@@ -68,6 +72,7 @@ object Planner {
                 reason = newReason
             }
             current.add(clip)
+            previous = clip
             currentBytes += clip.sizeBytes
             if (currentSig == null) currentSig = clip.probe?.signature
         }
@@ -123,19 +128,22 @@ object Planner {
                 continue
             }
 
-            // 5. Gaps (FR-3.4).
+            // 5. Gaps (FR-3.4) and 6. split into parts. A gap that starts a new trip is shown
+            // by the trip list itself, so only stops inside a trip are warned about (FR-3.5e).
             Ordering.detectGaps(group, opt.gapWarningSeconds)
+            val chunks = splitGroup(group, opt)
+            val tripStarts = chunks.filter { it.second == "trip gap" }.map { it.first.first() }.toSet()
             for (gap in group.gaps) {
+                if (gap.after in tripStarts) continue
                 warnings.add(
                     "${group.camera}: gap of ${"%.1f".format(gap.seconds / 60)} min between " +
                         "${gap.before.name} and ${gap.after.name}"
                 )
             }
-
-            // 6. Split into parts.
-            val chunks = splitGroup(group, opt)
+            val trips = numberTrips(chunks.map { it.second })
             chunks.forEachIndexed { i, (chunkClips, reason) ->
                 val index = i + 1
+                val (trip, tripCount, tripPart, tripParts) = trips[i]
                 parts.add(
                     OutputPart(
                         camera = group.camera,
@@ -145,9 +153,13 @@ object Planner {
                         splitReason = reason,
                         expectedDurationUs = chunkClips.sumOf { it.probe?.durationUs ?: 0L },
                         expectedSize = chunkClips.sumOf { it.sizeBytes },
+                        tripIndex = trip,
+                        tripCount = tripCount,
+                        tripPart = tripPart,
+                        tripParts = tripParts,
                     )
                 )
-                if (reason.isNotEmpty()) {
+                if (reason.isNotEmpty() && reason != "trip gap") {
                     warnings.add("${group.camera} part $index: new part started because of $reason")
                 }
             }
@@ -157,12 +169,29 @@ object Planner {
         val taken = mutableSetOf<String>()
         for (part in parts) {
             var stem = "${part.camera}_${timestampToken(part.clips.first())}_to_${timestampToken(part.clips.last())}"
-            if (part.partCount > 1) stem += "_part${part.partIndex}"
+            if (part.tripCount > 1) stem += "_trip${part.tripIndex}"
+            if (part.tripParts > 1) stem += "_part${part.tripPart}"
             part.outputName = uniqueName(stem, ".mp4") { it in taken || nameExists(it) }
             taken.add(part.outputName)
         }
 
         return MergePlan(groups, parts, unclassified, unreadable, warnings)
+    }
+
+    /** (trip, trips, part in trip, parts in trip) per chunk; a `trip gap` reason starts a trip (FR-3.5). */
+    fun numberTrips(reasons: List<String>): List<List<Int>> {
+        var trip = 0
+        val tripOf = reasons.mapIndexed { i, reason ->
+            if (i == 0 || reason == "trip gap") trip++
+            trip
+        }
+        val counts = tripOf.groupingBy { it }.eachCount()
+        val seen = mutableMapOf<Int, Int>()
+        return tripOf.map { t ->
+            val n = (seen[t] ?: 0) + 1
+            seen[t] = n
+            listOf(t, trip, n, counts.getValue(t))
+        }
     }
 
     /** First free name: stem.ext, then stem_2.ext, stem_3.ext, ... (FR-6.2). */

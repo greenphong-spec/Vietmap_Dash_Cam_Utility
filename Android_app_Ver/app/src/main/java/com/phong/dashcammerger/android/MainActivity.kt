@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -57,6 +59,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phong.dashcammerger.core.CAMERA_ORDER
@@ -68,6 +71,7 @@ private const val PREFS = "dashcam_merger"
 private const val KEY_TREE = "tree_uri"
 private const val KEY_OUT_TREE = "output_tree_uri"
 private const val KEY_SPLIT_GAP = "split_on_gap"
+private const val KEY_TRIP_GAP_MIN = "trip_gap_minutes"
 private const val KEY_SPLIT_FAT32 = "split_fat32"
 private const val KEY_ORDER_BY_TIME = "order_by_time"
 private const val KEY_LINK_PAIRS = "link_pairs"
@@ -75,6 +79,9 @@ private const val KEY_LINK_PAIRS = "link_pairs"
 private const val TAB_SETUP = 0
 private const val TAB_FILES = 1
 private const val TAB_DETAILS = 2
+
+/** FR-3.5: a break of more than this many minutes starts a new trip, unless changed. */
+private const val DEFAULT_TRIP_GAP_MIN = 15
 
 /** Just under FAT32's 4 GiB file limit, for SD cards formatted by the dashcam. */
 private const val FAT32_PART_GB = 3.9
@@ -104,11 +111,14 @@ private fun MergerScreen() {
     val prefs = remember { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
     var tree by remember { mutableStateOf(prefs.getString(KEY_TREE, null)?.let(Uri::parse)) }
     var outTree by remember { mutableStateOf(prefs.getString(KEY_OUT_TREE, null)?.let(Uri::parse)) }
-    var splitOnGap by remember { mutableStateOf(prefs.getBoolean(KEY_SPLIT_GAP, false)) }
+    var splitOnGap by remember { mutableStateOf(prefs.getBoolean(KEY_SPLIT_GAP, true)) }
+    var tripGapText by remember {
+        mutableStateOf(prefs.getInt(KEY_TRIP_GAP_MIN, DEFAULT_TRIP_GAP_MIN).toString())
+    }
     var splitFat32 by remember { mutableStateOf(prefs.getBoolean(KEY_SPLIT_FAT32, false)) }
     var linkPairs by remember { mutableStateOf(prefs.getBoolean(KEY_LINK_PAIRS, false)) }
     val session = MergeSession
-    remember { session.arrange(prefs.getBoolean(KEY_ORDER_BY_TIME, false)) }
+    remember { session.arrange(prefs.getBoolean(KEY_ORDER_BY_TIME, true)) }
 
     // Merging several GB takes minutes; don't let the screen timeout pause it.
     val view = LocalView.current
@@ -215,9 +225,33 @@ private fun MergerScreen() {
                                         ) { Text("Use default") }
                                     }
                                 }
-                                OptionRow("Start a new file after a trip gap (> 30 min)", splitOnGap, !session.busy) {
+                                OptionRow("Split into trips (one file per trip)", splitOnGap, !session.busy) {
                                     splitOnGap = it
                                     prefs.edit().putBoolean(KEY_SPLIT_GAP, it).apply()
+                                }
+                                // FR-3.5b: the trip gap, remembered; anything not a whole number > 0 means 15.
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        "New trip after a break of more than",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    OutlinedTextField(
+                                        value = tripGapText,
+                                        onValueChange = { text ->
+                                            tripGapText = text.filter { it.isDigit() }.take(4)
+                                            tripGapText.toIntOrNull()?.takeIf { it > 0 }?.let {
+                                                prefs.edit().putInt(KEY_TRIP_GAP_MIN, it).apply()
+                                            }
+                                        },
+                                        enabled = splitOnGap && !session.busy,
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        textStyle = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.width(72.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("min", style = MaterialTheme.typography.bodySmall)
                                 }
                                 OptionRow("Split at 3.9 GB (FAT32 SD card / USB stick)", splitFat32, !session.busy) {
                                     splitFat32 = it
@@ -280,7 +314,11 @@ private fun MergerScreen() {
                     if (t != null) {
                         session.scan(
                             ctx, t, effectiveOut,
-                            PlanOptions(splitOnGap = splitOnGap, maxPartGb = if (splitFat32) FAT32_PART_GB else 0.0),
+                            PlanOptions(
+                                splitOnGap = splitOnGap,
+                                gapSplitSeconds = 60 * (tripGapText.toIntOrNull()?.takeIf { it > 0 } ?: DEFAULT_TRIP_GAP_MIN),
+                                maxPartGb = if (splitFat32) FAT32_PART_GB else 0.0,
+                            ),
                         )
                     }
                 },
@@ -365,12 +403,20 @@ private fun PartSelector(enabled: Boolean, linkPairs: Boolean, onLinkPairs: (Boo
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Checkbox(checked = i in session.selected, enabled = enabled, onCheckedChange = { session.toggle(i, linkPairs) })
                     Column(Modifier.weight(1f)) {
-                        Text(part.outputName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        val label = Report.partLabel(part)
+                        Text(
+                            if (label.isEmpty()) part.camera.name else "${part.camera.name} $label",
+                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                        )
+                        Report.partSpan(part).takeIf { it.isNotEmpty() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
+                        }
                         Text(
                             "${part.clips.size} clips, ${Report.formatDuration(part.expectedDurationUs)}, " +
                                 Report.formatSize(part.expectedSize),
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        Text(part.outputName, style = MaterialTheme.typography.bodySmall)
                     }
                     IconButton(onClick = { session.move(pos, -1) }, enabled = enabled && pos > 0) { Text("▲") }
                     IconButton(onClick = { session.move(pos, 1) }, enabled = enabled && pos < order.size - 1) { Text("▼") }

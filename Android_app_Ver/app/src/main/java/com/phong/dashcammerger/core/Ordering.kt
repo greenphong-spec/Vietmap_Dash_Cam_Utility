@@ -14,8 +14,8 @@ object Ordering {
     )
     private val SEQ = Pattern.compile("(?<!\\d)(\\d{3,})(?!\\d)")
 
-    /** Assumed clip length when a clip has not been probed (typical dashcam clip). */
-    const val DEFAULT_CLIP_SECONDS = 60.0
+    // No clip length is assumed (FR-3.4a): dashcams record 1-, 3- or 5-minute clips, the
+    // setting can change between drives, and the last clip of a drive is shorter.
 
     private fun Matcher.int(group: Int): Int = group(group)!!.toInt()
 
@@ -88,6 +88,17 @@ object Ordering {
         }
     }
 
+    /**
+     * End of [before] (start + probed duration) to start of [after], in seconds; null when a
+     * time or the duration is unknown. Never start-to-start: 5-min clips are 300-302 s apart.
+     */
+    fun gapSeconds(before: ClipInfo, after: ClipInfo): Double? {
+        val t0 = before.timestamp ?: return null
+        val t1 = after.timestamp ?: return null
+        val us = before.probe?.durationUs ?: return null
+        return Duration.between(t0, t1).seconds - us / 1e6
+    }
+
     /** Record recording gaps between consecutive clips (FR-3.4); only meaningful for timestamp order. */
     fun detectGaps(group: CameraGroup, warnSeconds: Int) {
         if (group.orderSource != OrderSource.Timestamp) {
@@ -96,10 +107,7 @@ object Ordering {
         }
         val gaps = mutableListOf<Gap>()
         for ((before, after) in group.clips.zipWithNext()) {
-            val t0 = before.timestamp ?: continue
-            val t1 = after.timestamp ?: continue
-            val duration = before.probe?.let { it.durationUs / 1e6 } ?: DEFAULT_CLIP_SECONDS
-            val gap = Duration.between(t0, t1).seconds - duration
+            val gap = gapSeconds(before, after) ?: continue
             if (gap > warnSeconds) gaps.add(Gap(before, after, gap))
         }
         group.gaps = gaps

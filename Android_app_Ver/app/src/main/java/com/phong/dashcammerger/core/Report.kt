@@ -1,5 +1,6 @@
 package com.phong.dashcammerger.core
 
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Human-readable plan summary and run report (port of core/report.py) - FR-9. */
@@ -21,6 +22,24 @@ object Report {
         bytes >= GIB -> String.format(Locale.US, "%.2f GB", bytes / GIB)
         bytes >= MIB -> String.format(Locale.US, "%.1f MB", bytes / MIB)
         else -> String.format(Locale.US, "%.1f KB", bytes / KIB)
+    }
+
+    private val DAY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss")
+
+    /** "trip 2/9", "trip 2/9 part 1/2", "part 1/2" or "" for a single file (FR-3.5). */
+    fun partLabel(part: OutputPart): String {
+        var label = if (part.tripCount > 1) "trip ${part.tripIndex}/${part.tripCount}" else ""
+        if (part.tripParts > 1) label = "$label part ${part.tripPart}/${part.tripParts}".trim()
+        return label
+    }
+
+    /** "2026-10-14 15:42:40 - 16:12:39"; the end keeps its date only on another day; "" if unknown. */
+    fun partSpan(part: OutputPart): String {
+        val start = Arrange.start(part) ?: return ""
+        val end = Arrange.end(part) ?: return ""
+        val endText = if (end.toLocalDate() == start.toLocalDate()) end.format(TIME) else end.format(DAY_TIME)
+        return "${start.format(DAY_TIME)} - $endText"
     }
 
     /** Live line under the selection list (AR-10.8). */
@@ -46,7 +65,10 @@ object Report {
         appendLine("Unreadable: ${plan.unreadable.size}")
         appendLine("Parts to write: ${plan.parts.size}")
         for (part in plan.parts) {
-            appendLine("  ${part.outputName}  (${part.clips.size} clips, ${formatDuration(part.expectedDurationUs)}, ${formatSize(part.expectedSize)})")
+            val label = partLabel(part).let { if (it.isEmpty()) "" else " $it" }
+            val span = partSpan(part).let { if (it.isEmpty()) "" else "$it, " }
+            appendLine("  ${part.camera}$label: $span${part.clips.size} clips, ${formatDuration(part.expectedDurationUs)}, ${formatSize(part.expectedSize)}")
+            appendLine("    ${part.outputName}")
         }
         appendLine("Output folder: $outputFolder")
         if (plan.warnings.isNotEmpty()) {
@@ -60,7 +82,7 @@ object Report {
         val plan = report.plan
         for (r in report.results) {
             val p = r.part
-            appendLine("${p.camera} part ${p.partIndex}: ${r.finalName ?: p.outputName}")
+            appendLine("${p.camera} ${partLabel(p).ifEmpty { "part ${p.partIndex}" }}: ${r.finalName ?: p.outputName}")
             appendLine(
                 "    ${p.clips.size} files, ${formatDuration(if (r.actualDurationUs > 0) r.actualDurationUs else p.expectedDurationUs)}, " +
                     "${formatSize(r.actualSize)}  ->  ${r.status}" + if (r.reason.isNotEmpty()) " (${r.reason})" else ""

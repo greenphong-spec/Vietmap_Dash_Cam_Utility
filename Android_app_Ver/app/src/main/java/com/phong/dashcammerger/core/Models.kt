@@ -63,6 +63,11 @@ class OutputPart(
     val splitReason: String,
     val expectedDurationUs: Long,
     val expectedSize: Long,
+    /** FR-3.5: 1-based trip of this camera, trips of this camera, part within the trip, parts in it. */
+    val tripIndex: Int = 1,
+    val tripCount: Int = 1,
+    val tripPart: Int = 1,
+    val tripParts: Int = 1,
 ) {
     /** Final file name inside the merged/ folder, e.g. Front_20260101120000_to_20260101130000.mp4 */
     var outputName: String = ""
@@ -72,8 +77,9 @@ class OutputPart(
 data class PlanOptions(
     val outputSubfolder: String = "merged",
     val gapWarningSeconds: Int = 300,
-    val gapSplitSeconds: Int = 1800,
-    val splitOnGap: Boolean = false,
+    /** FR-3.5: a break of more than this starts a new trip (default 15 min). */
+    val gapSplitSeconds: Int = 900,
+    val splitOnGap: Boolean = true,
     val maxPartGb: Double = 0.0,
 )
 
