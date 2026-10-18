@@ -1,8 +1,0 @@
-2026-09-14 22:36:11,419 INFO    dashcam_merger.pipeline: Run 20260914_223611: input=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-14\test_it4_dry_run_writes_nothin0\Movie output=C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-14\test_it4_dry_run_writes_nothin0\Movie\merged
-2026-09-14 22:36:11,423 INFO    dashcam_merger.scanner: Scanned 6 video files in C:\Users\phong\AppData\Local\Temp\pytest-of-phong\pytest-14\test_it4_dry_run_writes_nothin0\Movie
-2026-09-14 22:36:11,423 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
-2026-09-14 22:36:11,428 INFO    dashcam_merger.ordering: Front: 3 clips ordered by timestamp
-2026-09-14 22:36:11,428 INFO    dashcam_merger.ordering: Rear: 3 clips ordered by timestamp
-2026-09-14 22:36:11,556 INFO    dashcam_merger.planner: Plan: 2 group(s), 2 part(s)
-2026-09-14 22:36:11,561 INFO    dashcam_merger.config: config.json not found, using defaults
-2026-09-14 22:36:12,274 INFO    dashcam_merger.config: config.json not found, using defaults

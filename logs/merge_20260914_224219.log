@@ -1,6 +1,0 @@
-2026-09-14 22:42:19,304 INFO    dashcam_merger.pipeline: Run 20260914_224219: input=C:\Users\phong\AppData\Local\Temp\claude\C--Claude-40-DashCAMmerger\7776c3a4-740b-420e-9468-4b731cff5946\scratchpad\DemoCard\Movie output=C:\Users\phong\AppData\Local\Temp\claude\c--Claude-40-DashCAMmerger\7776c3a4-740b-420e-9468-4b731cff5946\scratchpad\DemoCard\Movie\merged
-2026-09-14 22:42:19,316 INFO    dashcam_merger.scanner: Scanned 24 video files in C:\Users\phong\AppData\Local\Temp\claude\c--Claude-40-DashCAMmerger\7776c3a4-740b-420e-9468-4b731cff5946\scratchpad\DemoCard\Movie
-2026-09-14 22:42:19,317 INFO    dashcam_merger.cameras: Camera profile 'Xforce' matched 100% of files
-2026-09-14 22:42:19,317 INFO    dashcam_merger.ordering: Front: 12 clips ordered by timestamp
-2026-09-14 22:42:19,317 INFO    dashcam_merger.ordering: Rear: 12 clips ordered by timestamp
-2026-09-14 22:42:19,650 INFO    dashcam_merger.planner: Plan: 2 group(s), 2 part(s)

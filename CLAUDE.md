@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository layout
+
+This repo holds several related dashcam tools, grouped by product (see
+`README.md` for the full map):
+
+- `DashCamMerger/pc/` — the Windows merger (described in most of this file).
+- `DashCamMerger/android/` — Android port of the merger (Gradle project).
+- `GPSExtractor/pc/` and `GPSExtractor/android/` — the GPS Extractor pair (see below).
+- `TripSorter/` — planning docs only, no code yet.
+- `samples/` — sample GPS exports and screenshots; `samples/video/` holds local
+  test videos and is gitignored.
+
+Each code project is self-contained (own tests, `build.bat`/Gradle, `.venv`).
+Run its commands from inside that project folder.
+
 ## What this is
 
 DashCam Merger: a Windows GUI + CLI tool that losslessly joins dashcam clip
@@ -10,19 +25,23 @@ ffmpeg concat demuxer, without re-encoding. It never moves or renames source
 files, and only ever deletes them via the explicit, off-by-default,
 verification-gated FR-12 opt-in (`--delete-source` / a GUI checkbox) —
 never as a side effect of any other feature. Behavior is governed by two
-documents in the repo root: `DashCamMerger-Specification.md` (requirements
-FR-1…FR-12) and `DashCamMerger-Design.md` (implementation design).
-`CHANGELOG.md` records where the shipped implementation deliberately
-diverges from the design doc — check it before assuming the design doc is
-current. The `.html` versions of both documents are a generated,
-sidebar-navigable render of the `.md` (source of truth) — after editing
-either `.md`, run `python tools\gen_docs.py` (needs `pip install markdown`)
-to resync the `.html`; don't hand-edit the `.html` files.
+documents in `DashCamMerger/pc/docs/`: `DashCamMerger-Specification.md`
+(requirements FR-1…FR-12) and `DashCamMerger-Design.md` (implementation
+design); `merge-dashcam-camera-clips.md` beside them is the Claude skill the
+spec was derived from. `DashCamMerger/pc/CHANGELOG.md` records where the
+shipped implementation deliberately diverges from the design doc — check it
+before assuming the design doc is current. The `.html` versions of both
+documents (and of `DashCamMerger/android/DashCamMerger-Android-Specification.md`)
+are a generated, sidebar-navigable render of the `.md` (source of truth) —
+after editing any of those `.md` files, run `python tools\gen_docs.py` from
+`DashCamMerger/pc/` (needs `pip install markdown`) to resync the `.html`;
+don't hand-edit the `.html` files.
 
 ## Commands
 
-Run from the repo root; `src/` is the package root (`--paths src` / installed
-as `dashcam_merger`).
+Run from `DashCamMerger/pc/` (the merger's project root, which is also what
+`config.app_dir()` resolves to when running from source); `src/` is the
+package root (`--paths src` / installed as `dashcam_merger`).
 
 ```
 python -m venv .venv && .venv\Scripts\activate
@@ -43,10 +62,11 @@ The `integration` marker (declared in `pytest.ini`) gates tests that shell
 out to a real ffmpeg/ffprobe; they're skipped unless `ffmpeg\ffmpeg.exe`
 exists, same as `build.bat` does.
 
-`ffmpeg/` (bundled ffmpeg.exe/ffprobe.exe binaries) and `dist/`, `build/`,
-and the release `.zip`/`.sha256` are gitignored — they're fetched/generated,
-not sourced. To build or run integration tests locally, drop a gyan.dev
-essentials build's `ffmpeg.exe`/`ffprobe.exe` into `ffmpeg/`.
+`ffmpeg/` (bundled ffmpeg.exe/ffprobe.exe binaries), `logs/`, `dist/`,
+`build/`, the PyInstaller `.spec` files and the release `.zip`/`.sha256` are
+gitignored (root `.gitignore`) — they're fetched/generated, not sourced. To
+build or run integration tests locally, drop a gyan.dev essentials build's
+`ffmpeg.exe`/`ffprobe.exe` into `DashCamMerger/pc/ffmpeg/`.
 
 ## Architecture
 
@@ -110,8 +130,8 @@ relative to the exe/script for `logs/`, bundled `ffmpeg/`, etc.
 
 ## DashCam GPS Extractor (PC)
 
-`PC_app_GPSdataExtraction/` is a separate Windows app (own README, tests, `build.bat`):
-the PC version of `Android_app_GPSdataExtration/`. Its `dashgps/core/` is a line-for-line
+`GPSExtractor/pc/` is a separate Windows app (own README, tests, `build.bat`, `.venv`):
+the PC version of `GPSExtractor/android/`. Its `dashgps/core/` is a line-for-line
 port of the Android `core/` package and must produce byte-identical exports
 (`tests/test_parity.py` holds SHA-256 hashes of the Kotlin output). A change to parsing,
 cleaning or export in one app must be made in the other too, or the parity test fails.
