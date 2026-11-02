@@ -81,11 +81,11 @@ li{margin:3px 0}
 <tbody>
 <tr>
 <td>Document version</td>
-<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after &gt; 15 min, configurable, AR-6.1/6.3/6.5)</td>
+<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after &gt; 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13)</td>
 </tr>
 <tr>
 <td>App version</td>
-<td><code>1.4-android</code> (versionCode 5), package <code>com.phong.dashcammerger</code></td>
+<td><code>1.6-android</code> (versionCode 8; shown next to the title, from <code>BuildConfig</code>), package <code>com.phong.dashcammerger</code></td>
 </tr>
 <tr>
 <td>Status</td>
@@ -133,7 +133,8 @@ reader on USB-OTG), without a PC.</p>
 <li>No deletion of source clips (desktop FR-12 <code>--delete-source</code> is <strong>not</strong> ported). The app
   never deletes any file.</li>
 <li>No <code>config.json</code>, no user-defined camera profiles, no CLI, no parallel merge jobs.</li>
-<li>No background/foreground service: merging runs while the app is open (screen kept on).</li>
+<li>No resuming after the process dies (force stop, power off, reboot): a merge survives
+  screen-off and app switching only (AR-13).</li>
 <li>No network access, no analytics, no storage permissions.</li>
 </ul>
 <hr />
@@ -165,7 +166,7 @@ reader on USB-OTG), without a PC.</p>
 </tr>
 <tr>
 <td>Permissions in manifest</td>
-<td><strong>None</strong>. Folder access is granted per folder through the system picker (Storage Access Framework, persisted URI permissions).</td>
+<td><strong>No storage permissions</strong>: folder access is granted per folder through the system picker (Storage Access Framework, persisted URI permissions). Since v1.6 only the background-running ones (AR-13, §5.4).</td>
 </tr>
 </tbody>
 </table>
@@ -240,7 +241,15 @@ gradlew.bat assembleDebug           # app\build\outputs\apk\debug\app-debug.apk 
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 </code></pre>
 <p>Wireless debugging: <em>Settings → Developer options → Wireless debugging</em>, then
-<code>adb pair &lt;ip&gt;:&lt;pairing-port&gt;</code> and <code>adb connect &lt;ip&gt;:&lt;port&gt;</code>.</p>
+<code>adb pair &lt;ip&gt;:&lt;pairing-port&gt;</code> and <code>adb connect &lt;ip&gt;:&lt;port&gt;</code>.
+The two ports differ: the pairing port and code come from the <em>Pair device with pairing code</em>
+popup (single use, closed after pairing); the connect port is the <em>IP address &amp; Port</em> line on
+the Wireless debugging screen itself. On the Note 10 the connect port is often not advertised
+over mDNS, so <code>adb devices</code> stays empty after pairing until <code>adb connect</code> is given that port.
+Never <code>adb connect</code> to a pairing port: it spoils the code.</p>
+<p><strong>Versioning.</strong> <code>versionCode</code> / <code>versionName</code> in <code>app/build.gradle.kts</code> are bumped for every
+build handed to a phone (<code>versionCode</code> +1 per build, <code>versionName</code> <code>&lt;major&gt;.&lt;minor&gt;-android</code>)
+and shown next to the title from <code>BuildConfig</code> (<code>buildFeatures.buildConfig = true</code>).</p>
 <p><code>local.properties</code> (not committed) holds <code>sdk.dir=C\:\\Android\\Sdk</code>.</p>
 <hr />
 <h2 id="3-functional-requirements">3. Functional requirements</h2>
@@ -761,7 +770,7 @@ get <code>_2</code> names, AR-6.4).</p>
   app/build.gradle.kts
   app/src/main/AndroidManifest.xml
   app/src/main/res/values/{strings.xml, themes.xml}
-  app/src/main/res/drawable/{ic_launcher_background.xml, ic_launcher_foreground.xml}
+  app/src/main/res/drawable/{ic_launcher_background.xml, ic_launcher_foreground.xml, ic_stat_merge.xml}
   app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
   app/src/main/java/com/phong/dashcammerger/
     core/      (pure Kotlin, no android.* imports, JVM unit-tested)
@@ -775,6 +784,7 @@ get <code>_2</code> names, AR-6.4).</p>
       MediaProbe.kt   track selection, probe, output duration
       Merger.kt       stream-copy + verify + keep-incomplete
       MergeSession.kt orchestrator / state holder
+      MergeService.kt foreground service keeping scan/merge alive with the screen off (AR-13)
       MainActivity.kt Compose UI
   app/src/test/java/com/phong/dashcammerger/core/CoreTest.kt
 </code></pre>
@@ -867,11 +877,38 @@ nameExists: (String)-&gt;Boolean, onProgress: (String, Int, Int)-&gt;Unit)</code
 configuration change does not lose a running merge (the activity additionally declares
 <code>configChanges="orientation|screenSize|screenLayout|keyboardHidden"</code>). Worker threads post
 all UI-state changes to the main looper. Cancellation is an <code>AtomicBoolean</code>.</p>
+<p><strong>AR-13 Background running (v1.6).</strong> <code>scan</code>, <code>applyCameraMap</code> and <code>merge</code> call
+<code>MergeService.start()</code> (from the button tap, so it is allowed to start). <code>MergeService</code> is a
+foreground service (type <code>dataSync</code>) that does no work itself: it makes the process a
+foreground process so Android neither freezes nor kills it when the screen is off or the
+user switches app, holds a <code>PARTIAL_WAKE_LOCK</code> (released at the end; 6 h cap as a safety
+net) so the CPU keeps running, and once a second updates a low-importance notification
+(channel <em>Merge progress</em>: title <em>Merging dashcam clips – N %</em>, the status line, a progress
+bar, a <strong>Cancel</strong> action that calls <code>MergeSession.cancel()</code>; tapping it opens the app). When
+<code>MergeSession.busy</code> turns false it releases the lock, removes that notification, posts a
+<em>done</em> notification with the final status (tap opens the app) and stops itself.
+<code>START_NOT_STICKY</code>: if the process is killed anyway the merge is not resumed (see §7).
+<strong>AR-13.2</strong> Samsung's own freezer (<code>FreecessController</code>, reason <code>LEV</code>) still freezes an app
+that is under battery optimisation about 2 minutes after screen-off, foreground service
+or not, and disables its wake lock (seen on the Note 10, 2026-11-02: merge stalled at
+1.13 of 1.24 GB until the screen came back on). Apps exempt from battery optimisation
+(<em>Unrestricted</em>) are not frozen. So <strong>Merge</strong>, when the app is not exempt, first opens the
+system dialog <code>ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> (<em>Stop optimizing battery usage?</em>)
+once per app run, then starts the merge whatever the answer; the Setup tab shows
+<em>Merging continues with the screen off ✓</em> or <em>Merging pauses when the screen is off</em> with
+an <strong>Allow</strong> button (re-checked on resume).
+Android 13+ asks for the notification permission at first launch; refusing it only hides
+the notification, the merge still runs in the background. The screen-on flag while the
+app is open is kept.</p>
 <h3 id="54-manifest">5.4 Manifest</h3>
 <p>One <code>activity</code> <code>.android.MainActivity</code>, <code>exported="true"</code>, MAIN/LAUNCHER intent filter;
 <code>application</code> with <code>allowBackup="false"</code>, label <code>DashCam Merger</code>, icon
 <code>@mipmap/ic_launcher</code>, theme <code>Theme.DashCamMerger</code> (parent
-<code>android:Theme.Material.NoActionBar</code>). No <code>uses-permission</code> entries.</p>
+<code>android:Theme.Material.NoActionBar</code>). Permissions (v1.6, AR-13): <code>FOREGROUND_SERVICE</code>,
+<code>FOREGROUND_SERVICE_DATA_SYNC</code>, <code>WAKE_LOCK</code>, <code>POST_NOTIFICATIONS</code>, <code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> (AR-13.2); one <code>service</code>
+<code>.android.MergeService</code>, <code>exported="false"</code>, <code>foregroundServiceType="dataSync"</code>. Still no storage
+permissions. <code>buildFeatures.buildConfig = true</code> so the title can show
+<code>BuildConfig.VERSION_NAME</code> / <code>VERSION_CODE</code>.</p>
 <h3 id="55-launcher-icon">5.5 Launcher icon</h3>
 <p>Adaptive icon: background solid <code>#1F3A5F</code>; foreground vector (108×108 viewport) — white
 rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16h-12z</code>,
@@ -958,6 +995,11 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <td>size + mtime</td>
 <td>size</td>
 </tr>
+<tr>
+<td>Screen off / background</td>
+<td>n/a (desktop process)</td>
+<td>foreground service + wake lock + battery-optimisation exemption (AR-13)</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -1015,7 +1057,8 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <hr />
 <h2 id="8-known-limitations">8. Known limitations</h2>
 <ul>
-<li>Merging runs in the foreground only; leaving the app for long may let Android stop it.</li>
+<li>A merge survives screen-off and app switching (AR-13), but not the user swiping the app
+  away with <em>Force stop</em>, or a reboot; it is not resumed afterwards.</li>
 <li>Throughput is bounded by the SD card / USB reader (observed ≈ 0.5 GB per minute for
   SD → phone on the Note 10: 9.4 GB in about 15 minutes).</li>
 <li>B-frame streams are copied in decode order with their original timestamps; typical
@@ -1167,7 +1210,9 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <p>| DT-6 | DT-1 clips; Scan &amp; plan → both rows ticked, <code>Selected: 2 of 2</code>; Select none → Merge disabled; tick only Rear → Merge | Only the Rear file written, PASS; report shows <code>Not selected (skipped by user): 1</code> + Front name; sources unchanged | Not yet run (v1.1) |
 | DT-7 | A plan with ≥ 2 parts per camera (DT-4 card with trip gap, or 3.9 GB split); toggle a camera header; untick <code>_part1</code>, rotate the screen, Merge | Header toggles all of that camera's parts; selection survives rotation; only <code>_part2</code> written, with its planned name | Not yet run (v1.1) |</p>
 <p>| DT-8 | DT-4-style plan (2 trips × Front/Rear); <em>By time</em>; pair switch on; untick Front part 2; ▼ on the first row; Merge | List F1 R1 F2 R2; unticking F2 also unticks R2; merge writes R1 then F1; report lists F2/R2 as not selected | Partly run 2026-10-03 on a Vietmap M1 card (14 parts, 7 F + 7 R): By time gave F1 R1 F2 R2 F3 R3…; unticking Front part 2 gave Front 6/7, Rear 6/7, 12/14 — Pass. Merge not run |</p>
-<p>| DT-9 | Open app; Scan &amp; plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |</p>
+<p>| DT-9 | Open app; Scan &amp; plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |
+| DT-10 | v1.6 build 7: 4 Vietmap clips (USB reader <code>Vietmap_M1/Test</code>, 1.27 GB) → <code>DashTest</code>; Merge, then power button | Merge finishes with the screen off | 2026-11-02: <strong>Fail</strong> — progress notification and wake lock OK, but Samsung Freecess froze the app 2 min after screen-off (1.13 / 1.24 GB); resumed and PASSed when the screen came on. Led to AR-13.2 |
+| DT-11 | v1.6 build 8, same clips; Merge → <em>Stop optimizing battery usage?</em> → Allow, then power button | Whole merge with the screen off, no freeze | 2026-11-02: <strong>Pass</strong> — file grew ~9 MB/s, screen <em>Dozing</em> throughout, no Freecess freeze, <code>.partial</code> renamed after verification, report PASS / sources untouched, <em>Done - all 1 part(s) verified</em> notification. All 31 284 samples identical to the DT-10 output (only header times and final-chunk interleave differ) |</p>
 <p>Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
 design; colourful output from those clips is not a defect.</p>
 <h3 id="93-re-running-the-acceptance-test">9.3 Re-running the acceptance test</h3>

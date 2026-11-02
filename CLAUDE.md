@@ -128,6 +128,30 @@ paths, gap thresholds, `camera_profiles`), raising errors that name the
 offending key (FR-10). `config.app_dir()` is how the app locates itself
 relative to the exe/script for `logs/`, bundled `ffmpeg/`, etc.
 
+## DashCam Merger (Android)
+
+`DashCamMerger/android/` (Kotlin, Compose; run `gradlew.bat testDebugUnitTest` /
+`assembleDebug` from that folder). `core/` is a pure-Kotlin port of the PC planner and
+must stay in sync with it; `android/` holds the SAF storage, `MediaExtractor`→`MediaMuxer`
+merger, `MergeSession` (orchestrator) and `MainActivity`. Its rebuild reference is
+`DashCamMerger-Android-Specification.md` (AR-* requirements).
+
+- **Versioning:** bump `versionCode` (+1) in `app/build.gradle.kts` for every build
+  installed on a phone, and `versionName` (`<major>.<minor>-android`) for user-visible
+  changes; the title shows both via `BuildConfig`. Keep the spec's "App version" row in step.
+- **Background running (AR-13):** `MergeSession.scan/applyCameraMap/merge` start
+  `MergeService`, a `dataSync` foreground service that holds a partial wake lock and a
+  progress notification while `MergeSession.busy`, then stops itself. It does no work
+  itself — the work stays on `MergeSession`'s thread. On Samsung, a foreground service is
+  **not enough**: `FreecessController` freezes battery-optimised apps ~2 min after
+  screen-off, so Merge first asks for the battery-optimisation exemption. Don't remove
+  that prompt or the service without re-running the screen-off device test (spec §9.2
+  DT-10/DT-11).
+- **Device testing** on the Note 10 is over wireless adb: pair with the popup's port +
+  code, then `adb connect` the *different* port shown on the Wireless debugging screen
+  (it is often not advertised over mDNS). The USB card reader is not visible to
+  `adb shell`; pick folders through the app's SAF picker.
+
 ## DashCam GPS Extractor (PC)
 
 `GPSExtractor/pc/` is a separate Windows app (own README, tests, `build.bat`, `.venv`):

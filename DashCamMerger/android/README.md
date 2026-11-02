@@ -63,9 +63,21 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    Front and Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
    **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
    file from the same time.
-4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on while merging (large merges take a few
-   minutes — keep the app in the foreground). **Cancel** keeps the partial file as
-   `INCOMPLETE_DO_NOT_USE_*`.
+4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on
+   while the app is open. **Cancel** keeps the partial file as `INCOMPLETE_DO_NOT_USE_*`.
+
+### Screen off / other apps (v1.6)
+
+A merge keeps running when you press the power button, the screen times out, or you
+switch to another app: a notification shows the percentage and current file (with
+**Cancel**) and a second one says when it is done. Samsung phones additionally freeze
+"battery optimised" apps about 2 minutes after the screen goes off, so the first **Merge**
+asks *Stop optimizing battery usage?* — tap **Allow** (or later use the **Allow** button on
+the Setup tab, or *Settings → Apps → DashCam Merger → Battery → Unrestricted*). If denied,
+the merge pauses with the screen off and carries on when it comes back on. Powering off,
+restarting or force-stopping ends a merge; the half-written file stays as `….partial.mp4`.
+
+The app version (e.g. `v1.6-android (8)`) is shown next to the title.
 
 ## Build & install
 
@@ -77,12 +89,19 @@ gradlew.bat assembleDebug          # app\build\outputs\apk\debug\app-debug.apk
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Wireless debugging: `adb pair <ip>:<pair-port>` then `adb connect <ip>:<port>`.
+Wireless debugging: `adb pair <ip>:<pair-port> <code>` (port and code from the *Pair device
+with pairing code* popup), then `adb connect <ip>:<port>` with the **different** port shown as
+*IP address & Port* on the Wireless debugging screen itself. Don't `adb connect` to the
+pairing port — it spoils the code.
+
+Bump `versionCode` (+1) and, for user-visible changes, `versionName` in
+`app/build.gradle.kts` for every build installed on a phone; the title shows both.
 
 ## Layout
 
 - `core/` — pure Kotlin, no Android imports, unit-tested: `Models`, `Cameras`,
   `Ordering`, `Planner`, `Report` (ports of the Python modules of the same names).
 - `android/` — `SafStorage` (scanner + `OutputFolder` write guard), `MediaProbe`,
-  `Merger` (stream copy + verify), `MergeSession` (pipeline orchestrator), `MainActivity`
+  `Merger` (stream copy + verify), `MergeSession` (pipeline orchestrator), `MergeService`
+  (foreground service + wake lock + progress notification while busy), `MainActivity`
   (Compose UI).

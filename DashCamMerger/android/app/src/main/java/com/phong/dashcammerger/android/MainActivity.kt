@@ -1,9 +1,19 @@
 package com.phong.dashcammerger.android
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -62,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phong.dashcammerger.BuildConfig
 import com.phong.dashcammerger.core.CAMERA_ORDER
 import com.phong.dashcammerger.core.Camera
 import com.phong.dashcammerger.core.PlanOptions
@@ -120,7 +131,35 @@ private fun MergerScreen() {
     val session = MergeSession
     remember { session.arrange(prefs.getBoolean(KEY_ORDER_BY_TIME, true)) }
 
-    // Merging several GB takes minutes; don't let the screen timeout pause it.
+    // AR-13: the background merge shows its progress as a notification (Android 13+ asks).
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    // AR-13.2: exemption from battery optimisation ("Unrestricted"), checked again on return.
+    var backgroundAllowed by remember { mutableStateOf(isBackgroundAllowed(ctx)) }
+    var askedBackground by remember { mutableStateOf(false) }
+    var mergeAfterAsk by remember { mutableStateOf(false) }
+    val backgroundLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        backgroundAllowed = isBackgroundAllowed(ctx)
+        if (mergeAfterAsk) {
+            mergeAfterAsk = false
+            session.merge(ctx)
+        }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME) backgroundAllowed = isBackgroundAllowed(ctx)
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+
+    // Keep the screen on while the app is open; MergeService covers screen-off / background.
     val view = LocalView.current
     DisposableEffect(session.busy) {
         view.keepScreenOn = session.busy
@@ -169,7 +208,15 @@ private fun MergerScreen() {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("DashCam Merger", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("DashCam Merger", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 3.dp),
+            )
+        }
 
         val parts = session.planParts
         TabRow(selectedTabIndex = tab) {
@@ -257,6 +304,22 @@ private fun MergerScreen() {
                                     splitFat32 = it
                                     prefs.edit().putBoolean(KEY_SPLIT_FAT32, it).apply()
                                 }
+                                // AR-13.2: Samsung freezes apps under battery optimisation even
+                                // while they run a foreground service, which stalls the merge.
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        if (backgroundAllowed) "Merging continues with the screen off ✓"
+                                        else "Merging pauses when the screen is off - allow background running",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (!backgroundAllowed) {
+                                        Spacer(Modifier.width(8.dp))
+                                        OutlinedButton(onClick = { backgroundLauncher.launch(backgroundRequestIntent(ctx)) }) {
+                                            Text("Allow")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -326,7 +389,19 @@ private fun MergerScreen() {
             ) { Text("Scan & plan") }
             when (session.phase) {
                 Phase.Planned ->
-                    Button(onClick = { session.merge(ctx) }, enabled = session.selected.isNotEmpty()) {
+                    Button(
+                        onClick = {
+                            // AR-13.2: ask once per run of the app; merge whatever the answer.
+                            if (!isBackgroundAllowed(ctx) && !askedBackground) {
+                                askedBackground = true
+                                mergeAfterAsk = true
+                                backgroundLauncher.launch(backgroundRequestIntent(ctx))
+                            } else {
+                                session.merge(ctx)
+                            }
+                        },
+                        enabled = session.selected.isNotEmpty(),
+                    ) {
                         Text("Merge ${session.selected.size} file(s)")
                     }
                 Phase.Merging, Phase.Scanning ->
@@ -336,6 +411,14 @@ private fun MergerScreen() {
         }
     }
 }
+
+private fun isBackgroundAllowed(ctx: Context): Boolean =
+    ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
+
+/** System dialog "Let app always run in background?" (needs REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). */
+@SuppressLint("BatteryLife")
+private fun backgroundRequestIntent(ctx: Context) =
+    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
 
 @Composable
 private fun OptionRow(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {

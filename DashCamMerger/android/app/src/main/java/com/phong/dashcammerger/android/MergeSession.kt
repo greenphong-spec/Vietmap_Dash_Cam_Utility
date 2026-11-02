@@ -27,6 +27,7 @@ enum class Phase { Idle, Scanning, NeedCameraMap, Planned, Merging, Done, Error 
  * The single orchestrator (Android counterpart of core/pipeline.py).
  * Held at process level so a screen rotation does not lose a running merge.
  * Heavy work runs on a background thread; UI state is only mutated on the main thread.
+ * While busy, [MergeService] keeps the process in the foreground (AR-13).
  */
 object MergeSession {
     var phase by mutableStateOf(Phase.Idle); private set
@@ -129,6 +130,7 @@ object MergeSession {
         progress = 0f
         text = ""
         clearSelection()
+        MergeService.start(app) // AR-13
         Thread {
             try {
                 val out = OutputFolder.open(app, tree, outputTree, opt.outputSubfolder)
@@ -166,6 +168,7 @@ object MergeSession {
         Cameras.applyManualMap(tokens, mapping)
         phase = Phase.Scanning
         status = "Reading streams…"
+        MergeService.start(app) // AR-13
         Thread {
             try {
                 buildPlan(app)
@@ -226,6 +229,7 @@ object MergeSession {
         cancel.set(false)
         phase = Phase.Merging
         progress = 0f
+        MergeService.start(app) // AR-13: keeps running with the screen off
         Thread {
             try {
                 val totalBytes = parts.sumOf { it.expectedSize }.coerceAtLeast(1)
