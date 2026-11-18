@@ -15,7 +15,11 @@ import com.phong.dashcammerger.core.MergePlan
 import com.phong.dashcammerger.core.OutputPart
 import com.phong.dashcammerger.core.PartResult
 import com.phong.dashcammerger.core.PartStatus
+import com.phong.dashcammerger.core.PartRunState
 import com.phong.dashcammerger.core.PlanOptions
+import com.phong.dashcammerger.core.Progress
+import com.phong.dashcammerger.core.ProgressSnapshot
+import com.phong.dashcammerger.core.ProgressTracker
 import com.phong.dashcammerger.core.Planner
 import com.phong.dashcammerger.core.Report
 import com.phong.dashcammerger.core.RunReport
@@ -48,7 +52,16 @@ object MergeSession {
     /** AR-10.16: for each part, the other cameras' parts recorded at the same time. */
     private var partners: List<Set<Int>> = emptyList()
 
+    /** AR-14: the parts of the current/last run (merge order), their states and live progress. */
+    var runParts by mutableStateOf<List<OutputPart>>(emptyList()); private set
+    var partStates by mutableStateOf<List<PartRunState>>(emptyList()); private set
+    var partSeconds by mutableStateOf<List<Long>>(emptyList()); private set
+    var snapshot by mutableStateOf<ProgressSnapshot?>(null); private set
+
     val selectedParts: List<OutputPart> get() = order.filter { it in selected }.map { planParts[it] }
+
+    /** AR-14.1: at most two UI updates per second from the copy loop. */
+    private const val PUBLISH_MS = 500L
 
     private val main = Handler(Looper.getMainLooper())
     private val cancel = AtomicBoolean(false)
@@ -82,6 +95,10 @@ object MergeSession {
         freeBytes = null
         order = emptyList()
         partners = emptyList()
+        runParts = emptyList()
+        partStates = emptyList()
+        partSeconds = emptyList()
+        snapshot = null
     }
 
     // AR-10.7: selection edits only apply while a plan is on screen.
@@ -230,27 +247,66 @@ object MergeSession {
         phase = Phase.Merging
         progress = 0f
         MergeService.start(app) // AR-13: keeps running with the screen off
+        // AR-14: the run's parts, their states and the live progress.
+        runParts = parts
+        partStates = List(parts.size) { PartRunState.WAITING }
+        partSeconds = List(parts.size) { 0L }
+        val startMs = System.currentTimeMillis()
+        val tracker = ProgressTracker(parts.sumOf { it.expectedSize }.coerceAtLeast(1), startMs)
+        snapshot = tracker.snapshot(startMs)
         Thread {
             try {
-                val totalBytes = parts.sumOf { it.expectedSize }.coerceAtLeast(1)
-                var doneBytes = 0L
                 var lastUiUpdate = 0L
+                fun publish(force: Boolean = false) {
+                    val now = System.currentTimeMillis()
+                    if (!force && now - lastUiUpdate < PUBLISH_MS) return
+                    lastUiUpdate = now
+                    val snap = tracker.snapshot(now)
+                    ui {
+                        snapshot = snap
+                        progress = snap.doneBytes.toFloat() / snap.totalBytes
+                    }
+                }
+                fun setPart(i: Int, state: PartRunState, seconds: Long = 0) = ui {
+                    partStates = partStates.toMutableList().also { it[i] = state }
+                    if (seconds > 0) partSeconds = partSeconds.toMutableList().also { it[i] = seconds }
+                }
                 val results = mutableListOf<PartResult>()
                 for ((i, part) in parts.withIndex()) {
                     if (cancel.get()) break
                     val label = "Part ${i + 1}/${parts.size}: ${part.outputName}"
+                    tracker.startPart(i + 1, parts.size, part.expectedSize)
+                    setPart(i, PartRunState.RUNNING)
                     ui { status = label }
-                    results.add(
-                        Merger.mergePart(app, part, out, cancel) { bytes ->
-                            doneBytes += bytes
-                            val now = System.currentTimeMillis()
-                            if (now - lastUiUpdate > 200) {
-                                lastUiUpdate = now
-                                val frac = doneBytes.toFloat() / totalBytes
-                                ui { progress = frac }
-                            }
-                        }
+                    publish(force = true)
+                    val result = Merger.mergePart(
+                        app, part, out, cancel,
+                        onBytes = { bytes ->
+                            tracker.add(bytes, System.currentTimeMillis())
+                            publish()
+                        },
+                        onClip = { j, n ->
+                            tracker.clip(j, n)
+                            publish(force = true)
+                        },
+                        onFinishing = {
+                            tracker.finishing()
+                            ui { status = "Part ${i + 1}/${parts.size}: finishing ${part.outputName}" }
+                            publish(force = true)
+                        },
                     )
+                    results.add(result)
+                    tracker.endPart(part.expectedSize)
+                    setPart(
+                        i,
+                        when (result.status) {
+                            PartStatus.PASS -> PartRunState.PASS
+                            PartStatus.CANCELLED -> PartRunState.CANCELLED
+                            else -> PartRunState.FAIL
+                        },
+                        result.elapsedMs / 1000,
+                    )
+                    publish(force = true)
                 }
 
                 // FR-7.6: the sources must be exactly as we found them.
@@ -259,7 +315,11 @@ object MergeSession {
                     if (st == null || st.first != clip.sizeBytes) "${clip.name}: changed or missing" else null
                 }
                 val report = RunReport(p, results, out.displayPath, problems.isEmpty(), problems, skipped)
-                val reportText = Report.reportText(report)
+                val endMs = System.currentTimeMillis()
+                val took = Progress.elapsed(endMs - startMs)
+                // AR-14.8: Android-only timing line after the shared report text.
+                val reportText = Report.reportText(report).trimEnd('\n') + "\n" +
+                    Progress.reportTimeLine(startMs, endMs, results.sumOf { it.actualSize }) + "\n"
                 try {
                     out.writeText(Report.REPORT_FILENAME, reportText) // FR-9.2
                 } catch (_: Exception) {
@@ -272,7 +332,7 @@ object MergeSession {
                         cancel.get() -> "Cancelled - $passed of ${parts.size} part(s) finished"
                         passed == parts.size -> "Done - all ${parts.size} part(s) verified"
                         else -> "Finished with problems - $passed of ${parts.size} part(s) passed"
-                    }
+                    } + " in $took" // AR-14.7
                     text = reportText
                 }
             } catch (e: Throwable) {

@@ -36,5 +36,6 @@ def test_frames_at_gives_back_the_sampled_frames():
     first = list(frames.sample(VIDEO, 1.0, VIETMAP_M1_FRONT.crop))
     pick = first[3::7]
     again = list(frames.frames_at(VIDEO, [p for p, _ in pick], VIETMAP_M1_FRONT.crop))
-    assert [p for p, _ in again] == [p for p, _ in pick]
-    assert all((a == b).all() for (_, a), (_, b) in zip(again, pick))
+    assert [i for i, _, _ in again] == list(range(len(pick)))
+    assert [p for _, p, _ in again] == [p for p, _ in pick]
+    assert all((a == b).all() for (_, _, a), (_, b) in zip(again, pick))

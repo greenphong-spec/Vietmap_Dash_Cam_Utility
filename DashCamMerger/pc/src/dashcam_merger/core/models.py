@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Literal
 
@@ -103,6 +103,7 @@ class MergePlan:
     warnings: list[str]  # human readable (FR-2.4, FR-3.3, FR-3.4)
     ffmpeg_commands: list[list[str]] = field(default_factory=list)  # for --dry-run
     not_selected: list[OutputPart] = field(default_factory=list)  # FR-3.6, not exported
+    time_range: str = ""  # FR-3.7, e.g. "2026-11-02 14:05 to 14:30"; "" = everything
 
 
 @dataclass(slots=True)
@@ -170,6 +171,18 @@ class AppConfig:  # FR-10
     camera_profiles: list[CameraProfile]  # user profiles only
 
 
+@dataclass(frozen=True, slots=True)
+class TimePoint:  # FR-3.7
+    """One end of a time range. Without a day it is resolved against the footage."""
+
+    time: time
+    day: date | None = None
+
+    def __str__(self) -> str:
+        text = self.time.strftime("%H:%M")
+        return f"{self.day.isoformat()} {text}" if self.day else text
+
+
 @dataclass(slots=True)
 class RunOptions:  # everything the CLI/GUI can set per run
     input_dir: Path
@@ -181,6 +194,9 @@ class RunOptions:  # everything the CLI/GUI can set per run
     # FR-3.6 export selection; None = everything. Both given -> a part must match both.
     trips: set[int] | None = None  # trip numbers (CLI --trips), all cameras
     selected_parts: set[str] | None = None  # planner.part_key() values (GUI checkboxes)
+    # FR-3.7 time range; None = open end. Whole clips that overlap it are merged.
+    time_from: TimePoint | None = None
+    time_to: TimePoint | None = None
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False

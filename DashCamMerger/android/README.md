@@ -63,8 +63,27 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    Front and Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
    **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
    file from the same time.
-4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on
-   while the app is open. **Cancel** keeps the partial file as `INCOMPLETE_DO_NOT_USE_*`.
+4. **Merge** (enabled when at least one file is ticked) — the screen stays on while the app
+   is open. **Cancel** keeps the partial file as `INCOMPLETE_DO_NOT_USE_*`.
+
+### Progress while merging (v1.7)
+
+Below the status line the app shows how far the merge is and when it will finish:
+
+```
+Part 2/5: Front_20261101_055438_to_20261101_085644_trip9.mp4
+43 % · 2.10 / 4.90 GB · 9.2 MB/s · 5 min left (done ≈ 21:47)
+[██████████░░░░░░░░░░░░░]
+Elapsed 6 min 12 s · this file 61 % · clip 3/20
+```
+
+The speed is measured over the last 30 seconds, so the time left adapts when the card gets
+faster or slower; for the first few seconds it says *estimating time left…*. If nothing is
+copied for 15 s it says *no progress for …* instead of a time. The **Details** tab lists
+every file of the run (✓ done with its time, ▶ running with %, ○ waiting, ✗ failed). The
+notification shows the same percent, time left and finish time, so you don't need to open
+the app. At the end the status says how long it took (e.g. *Done - all 3 part(s) verified
+in 15 min 34 s*) and `merge_report.txt` ends with a `Time:` line (start, end, average speed).
 
 ### Screen off / other apps (v1.6)
 
@@ -100,7 +119,8 @@ Bump `versionCode` (+1) and, for user-visible changes, `versionName` in
 ## Layout
 
 - `core/` — pure Kotlin, no Android imports, unit-tested: `Models`, `Cameras`,
-  `Ordering`, `Planner`, `Report` (ports of the Python modules of the same names).
+  `Ordering`, `Planner`, `Report` (ports of the Python modules of the same names), plus
+  the Android-only `Progress` (speed, time left, progress texts; `ProgressTest`).
 - `android/` — `SafStorage` (scanner + `OutputFolder` write guard), `MediaProbe`,
   `Merger` (stream copy + verify), `MergeSession` (pipeline orchestrator), `MergeService`
   (foreground service + wake lock + progress notification while busy), `MainActivity`

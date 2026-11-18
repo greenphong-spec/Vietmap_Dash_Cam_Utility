@@ -75,7 +75,12 @@ import androidx.compose.ui.unit.sp
 import com.phong.dashcammerger.BuildConfig
 import com.phong.dashcammerger.core.CAMERA_ORDER
 import com.phong.dashcammerger.core.Camera
+import com.phong.dashcammerger.core.PartRunState
 import com.phong.dashcammerger.core.PlanOptions
+import com.phong.dashcammerger.core.Progress
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
 import com.phong.dashcammerger.core.Report
 
 private const val PREFS = "dashcam_merger"
@@ -344,10 +349,13 @@ private fun MergerScreen() {
                     }
                 }
 
-                else -> if (session.text.isEmpty()) {
-                    Text("The plan, the merge report and any errors appear here.", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    Card(Modifier.fillMaxSize()) {
+                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (session.runParts.isNotEmpty()) RunProgressCard() // AR-14.6
+                    if (session.text.isEmpty()) {
+                        if (session.runParts.isEmpty()) {
+                            Text("The plan, the merge report and any errors appear here.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else Card(Modifier.fillMaxWidth().weight(1f)) {
                         Text(
                             session.text,
                             fontFamily = FontFamily.Monospace,
@@ -367,7 +375,25 @@ private fun MergerScreen() {
         if (session.status.isNotEmpty()) {
             Text(session.status, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         }
-        if (session.busy) {
+        val snap = session.snapshot
+        if (session.phase == Phase.Merging && snap != null) {
+            // AR-14.5: ticks every second so elapsed time and the stall check move on their own.
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    now = System.currentTimeMillis()
+                    delay(1000)
+                }
+            }
+            val t = maxOf(now, snap.lastByteMs)
+            Text(Progress.line(snap, t), style = MaterialTheme.typography.bodySmall)
+            LinearProgressIndicator(progress = { snap.percent / 100f }, modifier = Modifier.fillMaxWidth())
+            Text(
+                Progress.detail(snap, t),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (session.busy) {
             LinearProgressIndicator(progress = { session.progress }, modifier = Modifier.fillMaxWidth())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -407,6 +433,41 @@ private fun MergerScreen() {
                 Phase.Merging, Phase.Scanning ->
                     OutlinedButton(onClick = { session.cancel() }, enabled = session.phase == Phase.Merging) { Text("Cancel") }
                 else -> Unit
+            }
+        }
+    }
+}
+
+/** AR-14.6: one row per part of the run, in merge order. */
+@Composable
+private fun RunProgressCard() {
+    val session = MergeSession
+    val snap = session.snapshot
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .padding(12.dp)
+                .heightIn(max = 220.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("Progress", style = MaterialTheme.typography.labelLarge)
+            session.runParts.forEachIndexed { i, part ->
+                val state = session.partStates.getOrNull(i) ?: PartRunState.WAITING
+                val secs = session.partSeconds.getOrNull(i) ?: 0L
+                val text = when (state) {
+                    PartRunState.RUNNING -> "▶ ${part.outputName} ${snap?.partPercent ?: 0} %"
+                    PartRunState.WAITING -> "○ ${part.outputName}"
+                    PartRunState.PASS -> "✓ ${part.outputName} · ${Progress.elapsed(secs * 1000)}"
+                    PartRunState.FAIL, PartRunState.CANCELLED -> "✗ ${part.outputName}"
+                }
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (state == PartRunState.RUNNING) FontWeight.Bold else FontWeight.Normal,
+                    color = if (state == PartRunState.WAITING) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }

@@ -147,6 +147,12 @@ merger, `MergeSession` (orchestrator) and `MainActivity`. Its rebuild reference 
   screen-off, so Merge first asks for the battery-optimisation exemption. Don't remove
   that prompt or the service without re-running the screen-off device test (spec §9.2
   DT-10/DT-11).
+- **Progress tracking (AR-14):** `core/Progress.kt` (`ProgressTracker` → immutable
+  `ProgressSnapshot`, texts in `Progress`) is Android-only and pure Kotlin — keep the
+  maths and wording there (tested by `ProgressTest`), not in the UI or the service.
+  `MergeSession` feeds it from `Merger.mergePart`'s `onBytes`/`onClip`/`onFinishing`
+  and publishes at most every 500 ms; the report's `Time:` line is appended on Android
+  only, so the shared `Report.reportText` stays in step with the PC report.
 - **Device testing** on the Note 10 is over wireless adb: pair with the popup's port +
   code, then `adb connect` the *different* port shown on the Wireless debugging screen
   (it is often not advertised over mDNS). The USB card reader is not visible to

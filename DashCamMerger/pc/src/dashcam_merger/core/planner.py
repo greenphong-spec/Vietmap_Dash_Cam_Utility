@@ -10,7 +10,7 @@ from pathlib import Path
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import cameras, concat, ordering
+from . import cameras, concat, ordering, timerange
 from .models import (
     AppConfig,
     CameraGroup,
@@ -119,9 +119,13 @@ def trip_gap_seconds(cfg: AppConfig, opt: RunOptions) -> float:
 
 
 def _split_group(
-    group: CameraGroup, cfg: AppConfig, opt: RunOptions, fully_probed: bool
+    group: CameraGroup,
+    cfg: AppConfig,
+    opt: RunOptions,
+    fully_probed: bool,
+    clips: list[ClipInfo] | None = None,
 ) -> list[tuple[list[ClipInfo], str]]:
-    """Walk the ordered clips and start a new part whenever a rule fires."""
+    """Walk the ordered clips (default: the whole group); a rule that fires starts a new part."""
     split_on_gap = bool(_effective(opt.split_on_gap, cfg.split_on_gap))
     split_on_gap = split_on_gap and group.order_source == "timestamp"
     trip_gap = trip_gap_seconds(cfg, opt)
@@ -135,7 +139,7 @@ def _split_group(
     reason = ""
 
     previous: ClipInfo | None = None
-    for clip in group.clips:
+    for clip in group.clips if clips is None else clips:
         new_reason = ""
         if current:
             gap = ordering.gap_seconds(previous, clip) if previous is not None else None
@@ -165,21 +169,27 @@ def _split_group(
     return parts
 
 
-def _number_trips(reasons: list[str]) -> list[tuple[int, int, int, int]]:
-    """(trip, trips, part in trip, parts in trip) for each chunk; a trip gap starts a trip."""
-    trip_of: list[int] = []
+def _trip_of_clips(chunks: list[tuple[list[ClipInfo], str]]) -> tuple[dict[int, int], int]:
+    """(id(clip) -> trip number, trip count) for a whole group; a trip gap starts a trip."""
+    trip_of: dict[int, int] = {}
     trip = 0
-    for i, reason in enumerate(reasons):
+    for i, (chunk_clips, reason) in enumerate(chunks):
         if i == 0 or reason == "trip gap":
             trip += 1
-        trip_of.append(trip)
-    counts = {t: trip_of.count(t) for t in set(trip_of)}
+        for clip in chunk_clips:
+            trip_of[id(clip)] = trip
+    return trip_of, trip
+
+
+def _number_trips(trips: list[int], trip_count: int) -> list[tuple[int, int, int, int]]:
+    """(trip, trips, part in trip, parts in trip) for each chunk, given each chunk's trip."""
     out: list[tuple[int, int, int, int]] = []
     seen: dict[int, int] = {}
-    for t in trip_of:
+    for t in trips:
         seen[t] = seen.get(t, 0) + 1
-        out.append((t, trip, seen[t], counts[t]))
+        out.append((t, trip_count, seen[t], trips.count(t)))
     return out
+
 
 def build_plan(
     clips: list[ClipInfo],
@@ -218,6 +228,11 @@ def build_plan(
         elif group.order_source == "sequence":
             warnings.append(f"{group.camera}: order based on sequence number in filename")
 
+    # 2b. Time range (FR-3.7), resolved before probing so a bad range fails fast.
+    days = {c.timestamp.date() for g in groups for c in g.clips if c.timestamp is not None}
+    window = timerange.resolve_range(opt.time_from, opt.time_to, days)
+    ranged = window != (None, None)
+
     parts: list[OutputPart] = []
     for group in groups:
         # 3. Probe (FR-4.1, amended - see _probe_everything).
@@ -242,14 +257,30 @@ def build_plan(
         # shown by the trip list itself, so only stops inside a trip are warned about.
         ordering.detect_gaps(group, cfg.gap_warning_seconds)
         chunks = _split_group(group, cfg, opt, fully_probed)
+        # Trip numbers always come from the whole card (FR-3.6c), also inside a range.
+        trip_of, trip_count = _trip_of_clips(chunks)
+        kept = {id(c) for c in group.clips}
+        if ranged:  # FR-3.7: keep whole clips that overlap the range, then split those
+            if group.order_source != "timestamp":
+                warnings.append(
+                    f"{group.camera}: no timestamps in the file names, the time range "
+                    "cannot be applied - camera left out"
+                )
+                continue
+            in_range = [c for c in group.clips if timerange.overlaps(c, *window)]
+            if not in_range:
+                warnings.append(f"{group.camera}: no clips in the time range")
+                continue
+            kept = {id(c) for c in in_range}
+            chunks = _split_group(group, cfg, opt, fully_probed, in_range)
         trip_starts = {id(c[0]) for c, reason in chunks if reason == "trip gap"}
         for before, after, seconds in group.gaps:
-            if id(after) not in trip_starts:
+            if id(after) not in trip_starts and id(before) in kept and id(after) in kept:
                 warnings.append(
                     f"{group.camera}: gap of {seconds / 60:.1f} min between "
                     f"{before.path.name} and {after.path.name}"
                 )
-        trip_numbers = _number_trips([reason for _, reason in chunks])
+        trip_numbers = _number_trips([trip_of[id(c[0])] for c, _ in chunks], trip_count)
         group_signatures = {c.probe.signature for c in group.clips if c.probe is not None}
         for index, (chunk_clips, reason) in enumerate(chunks, start=1):
             chunk_sigs = {c.probe.signature for c in chunk_clips if c.probe is not None}
@@ -305,6 +336,7 @@ def build_plan(
         unreadable=unreadable,
         warnings=warnings,
         not_selected=not_selected,
+        time_range=timerange.describe(*window),
     )
     # 9. Commands (shown by --dry-run).
     plan.ffmpeg_commands = [concat.build_command(cfg.ffmpeg_path, p) for p in parts]

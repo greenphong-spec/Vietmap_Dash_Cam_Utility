@@ -268,3 +268,38 @@ def test_merge_plan_does_not_replace_the_scan_table(app, tmp_path):
     app._handle(ProgressEvent(kind="plan", plan=plan))
     assert len(app.tree.get_children()) == 6
     assert len(app.export_keys) == 5
+
+
+# ---- time range (FR-3.7)
+def test_time_range_boxes_are_passed_on(app, tmp_path):
+    from datetime import date, time
+
+    from dashcam_merger.core.models import TimePoint
+
+    app.input_var.set(str(tmp_path))
+    opt = app._options(dry_run=True)
+    assert opt.time_from is None and opt.time_to is None
+    app.time_from_var.set("2026-10-14 08:05")
+    app.time_to_var.set(" 08:30 ")
+    opt = app._options(dry_run=True)
+    assert opt.time_from == TimePoint(time(8, 5), date(2026, 10, 14))
+    assert opt.time_to == TimePoint(time(8, 30))
+
+
+def test_bad_time_range_does_not_start_a_run(app, tmp_path, monkeypatch):
+    shown = []
+    monkeypatch.setattr("dashcam_merger.gui.messagebox.showwarning", lambda *a, **k: shown.append(a))
+    app.input_var.set(str(tmp_path))
+    app.time_from_var.set("half past two")
+    app._scan()
+    assert app.worker is None and len(shown) == 1 and "Time range" in shown[0][1]
+
+
+def test_merge_refused_when_range_changed_after_scan(app, tmp_path, monkeypatch):
+    shown = []
+    monkeypatch.setattr("dashcam_merger.gui.messagebox.showwarning", lambda *a, **k: shown.append(a))
+    app.input_var.set(str(tmp_path))
+    app._fill_tree(fake_plan(tmp_path))  # scanned with empty boxes
+    app.time_to_var.set("09:00")
+    app._merge()
+    assert app.worker is None and "Press Scan again" in shown[0][1]

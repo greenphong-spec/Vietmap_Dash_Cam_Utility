@@ -1,4 +1,4 @@
-DashCam Merger 1.0.0
+DashCam Merger 1.1.0
 ====================
 
 What it does
@@ -32,6 +32,11 @@ Using it (the 4-step way)
 4. Click "Merge" and wait. Each camera gets its own progress bar with a speed
    and a time estimate. When it finishes, click "Open output folder".
 
+Only want part of a drive? Type a start and/or end time in the "Only merge
+from ... to ..." boxes (for example 14:05 and 14:30, or 2026-11-02 14:05 when
+the card holds several days) and click "Scan" again. Clips are never cut, so
+the file may begin or end up to one clip (1-5 minutes) outside the times.
+
 Every finished file is checked before you are told it worked: its length must
 match the total length of the clips that went into it. A file that fails the
 check is never presented as a good result.
@@ -48,6 +53,9 @@ Useful options:
     --no-split-on-gap      one file per camera instead of one per trip
     --trip-gap-minutes 20  a break longer than 20 min starts a new trip (default 15)
     --trips 2,5-7          export only trips 2, 5, 6 and 7 (see --dry-run for numbers)
+    --from 14:05 --to 14:30    merge only the clips recorded between two times
+                           (add the date when the card holds several days:
+                           --from "2026-11-02 14:05"; either one may be left out)
     --max-part-gb 4        split outputs at 4 GB (handy for FAT32 USB sticks)
     --reencode             re-encode when clip formats differ (slow, not lossless)
     --overwrite            replace previous outputs (the old one is renamed, not deleted)

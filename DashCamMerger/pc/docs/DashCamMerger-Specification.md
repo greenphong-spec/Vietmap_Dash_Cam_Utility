@@ -1,7 +1,7 @@
 # DashCam Merger – Software Specification
 
 **Version:** 1.0 draft
-**Date:** 2026-09-14 (rev. 2026-10-17: clip length 1 / 3 / 5 min, FR-3.4 break rule; trips FR-3.5; trip selection FR-3.6)
+**Date:** 2026-09-14 (rev. 2026-10-17: clip length 1 / 3 / 5 min, FR-3.4 break rule; trips FR-3.5; trip selection FR-3.6; rev. 2026-11-10: time range FR-3.7)
 **Target platform:** Windows 10 / 11 (64-bit), fully offline
 **Source of requirements:** `merge-dashcam-camera-clips.md` (Claude skill) in this folder
 
@@ -177,6 +177,29 @@ uses a rule table plus a confirmation dialog.
   - FR-3.6d The plan summary and the report SHALL say what was not exported:
     "Not selected (not exported): N of M files - Front trip 1/9, …". Clips of a trip
     that is not exported are never read by ffmpeg and never deleted (FR-12).
+- FR-3.7 Time range. The user SHALL be able to merge only the footage recorded between
+  two times instead of a whole trip.
+  - FR-3.7a The range is a *from* time and a *to* time, each optional (an empty end is
+    open), given **to the minute**: `HH:MM` or `YYYY-MM-DD HH:MM` (seconds are accepted
+    but not needed). GUI: boxes *Only merge from … to …*, applied by **Scan**. CLI:
+    `--from TIME`, `--to TIME`.
+  - FR-3.7b The merge stays lossless: no clip is cut. Every **whole clip** with any part
+    inside the range is merged, so an output may start up to one clip length before
+    *from* and end up to one clip length after *to* (1 / 3 / 5 min, FR-3.4a).
+  - FR-3.7c A time without a date takes the date of the other end, else the footage's
+    only day. If the footage covers several days and no date is given, that is a usage
+    error asking for the date. A time-only *to* at or before *from* means the next day
+    (23:30 to 00:30).
+  - FR-3.7d The range applies to every camera and combines with trips: a range that
+    spans a trip gap still gives one file per trip, trip numbers stay those of the whole
+    folder (FR-3.6c), and export selection (FR-3.6) works on the trimmed trips. File
+    names carry the first and last merged clip as usual (FR-6.3).
+  - FR-3.7e The plan summary and the report SHALL show
+    "Time range: 2026-11-02 14:05 to 14:30 (whole clips)". A camera with no clip in the
+    range, or whose clips have no filename timestamps, is left out with a warning. Clips
+    outside the range are never read by ffmpeg and never deleted (FR-12).
+  - FR-3.7f GUI: if the boxes are changed after a Scan, Merge asks for a new Scan first,
+    so what is merged is always what the table showed.
 
 ### FR-4 Codec consistency check
 - FR-4.1 Before merging a group, the tool SHALL run ffprobe on the first file, the
@@ -297,7 +320,8 @@ Missing keys use defaults; an invalid file produces a clear error naming the lin
 ```
 DashCamMerger.exe --input <folder> [--output <folder>] [--yes] [--no-recursive]
                   [--camera-map "F=Front,R=Rear"] [--split-on-gap | --no-split-on-gap]
-                  [--trip-gap-minutes N] [--trips LIST] [--max-part-gb N]
+                  [--trip-gap-minutes N] [--trips LIST] [--from TIME] [--to TIME]
+                  [--max-part-gb N]
                   [--reencode] [--overwrite] [--keep-lists] [--parallel N]
                   [--dry-run] [--delete-source] [--verbose] [--version]
 ```
@@ -307,6 +331,8 @@ DashCamMerger.exe --input <folder> [--output <folder>] [--yes] [--no-recursive]
 - `--trip-gap-minutes N` (N > 0) overrides `gap_split_seconds` for this run only.
 - `--trips LIST` exports only the listed trips (FR-3.6b); run `--dry-run` first to see
   the numbers.
+- `--from TIME` / `--to TIME` merge only the whole clips between two times (FR-3.7), e.g.
+  `--from 14:05 --to 14:30` or `--from "2026-11-02 14:05"`; a bad range is exit code 2.
 - Exit codes: 0 = all groups PASS; 1 = at least one group FAIL; 2 = usage/config error;
   3 = no input files; 130 = cancelled by user.
 
@@ -342,7 +368,9 @@ Single window, about 720×520 px, resizable.
    outputs*, *Delete original clips after successful merge (cannot be undone)* (FR-12,
    off by default). Second row: checkbox *Split into trips: new trip after a break of
    more than* + spinbox *N* *min* (from `config.json`, default on / 15, remembered per
-   FR-10.3); spinbox *Max part size (GB, 0 = unlimited)*.
+   FR-10.3); spinbox *Max part size (GB, 0 = unlimited)*. Third row: *Only merge from*
+   [box] *to* [box] (`HH:MM` or `YYYY-MM-DD HH:MM`, empty = all), applied by Scan
+   (FR-3.7).
 5. **Merge** button (enabled after a successful scan) and **Cancel** button.
 6. Progress area: one progress bar per camera group with percent, MB/s, ETA;
    a scrolling log pane below.
@@ -395,6 +423,8 @@ When camera detection is ambiguous (FR-2.3) a modal dialog appears during **Scan
 - Cancel mid-run → expect `INCOMPLETE_DO_NOT_USE_` file and no deletion.
 - Trip selection (FR-3.6): `--trips 2` on 3 trips × Front/Rear → only the two `_trip2`
   files; the report says "Not selected (not exported): 4 of 6 files"; sources unchanged.
+- Time range (FR-3.7): `--from 15:28 --to 15:31` on ten 1-min clips starting 15:25:16 →
+  one file of the four clips 15:27:16 … 15:30:16; the plan shows the "Time range" line.
 - Trips (FR-3.5): two drives 20 min apart with a 10-min stop inside the second →
   `_trip1` and `_trip2` files, PASS; `--trip-gap-minutes 5` on a 10-min break → 2 trips
   in the `--dry-run` plan, default 15 → 1 file.
@@ -417,7 +447,7 @@ When camera detection is ambiguous (FR-2.3) a modal dialog appears during **Scan
 2. Download a static Windows ffmpeg build; copy `ffmpeg.exe`, `ffprobe.exe` into `ffmpeg\`.
 3. `pytest`
 4. `pyinstaller --noconfirm --onedir --windowed --name DashCamMerger --add-data "ffmpeg;ffmpeg" --add-data "config.json;." src\main.py`
-5. Zip `dist\DashCamMerger\` as `DashCamMerger_v1.0_win64.zip`.
+5. Zip `dist\DashCamMerger\` as `DashCamMerger_v<version>_win64.zip` (version from `__version__`).
 6. Record ffmpeg version and SHA-256 of the zip in `CHANGELOG.md`.
 
 ## 12. Suggested project structure

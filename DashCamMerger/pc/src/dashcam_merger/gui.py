@@ -30,6 +30,7 @@ from .core.models import AppConfig, CameraLabel, ClipInfo, RunOptions
 from .core.planner import part_key
 from .core.progress import ProgressEvent, QueueSink, describe, percent_of
 from .core.report import format_duration, format_size, part_label, part_span
+from .core.timerange import TimeRangeError, parse_time_point
 
 log = logging.getLogger("dashcam_merger.gui")
 
@@ -152,6 +153,8 @@ class App:
         # FR-3.6: table row id -> planner.part_key, and the keys ticked for export.
         self.row_keys: dict[str, str] = {}
         self.export_keys: set[str] = set()
+        # FR-3.7: the From/To texts the table was scanned with.
+        self._scanned_range: tuple[str, str] = ("", "")
 
         self.root = root = Tk()
         root.title(TITLE)
@@ -238,6 +241,20 @@ class App:
         ttk.Spinbox(
             options2, from_=0, to=64, increment=1, width=5, textvariable=self.max_gb_var
         ).pack(side="left")
+
+        # Third options row: the time range (FR-3.7). Empty boxes mean everything.
+        options3 = ttk.Frame(root)
+        options3.grid(row=8, column=0, columnspan=3, padx=8, pady=(0, 6), sticky="w")
+        ttk.Label(options3, text="Only merge from").pack(side="left")
+        self.time_from_var = StringVar()
+        self.time_to_var = StringVar()
+        ttk.Entry(options3, textvariable=self.time_from_var, width=17).pack(side="left", padx=4)
+        ttk.Label(options3, text="to").pack(side="left")
+        ttk.Entry(options3, textvariable=self.time_to_var, width=17).pack(side="left", padx=4)
+        ttk.Label(
+            options3,
+            text="HH:MM or YYYY-MM-DD HH:MM (empty = all), then press Scan",
+        ).pack(side="left", padx=(4, 0))
 
         # One row per output file: with "Split into trips" that is one row per trip.
         # The Export column is a checkbox: click a row to include or leave it out (FR-3.6).
@@ -339,7 +356,12 @@ class App:
             self.output_var.set(chosen)
             self._auto_output = False
 
+    def _range_texts(self) -> tuple[str, str]:
+        return self.time_from_var.get().strip(), self.time_to_var.get().strip()
+
     def _options(self, dry_run: bool) -> RunOptions:
+        """Raises TimeRangeError when a From/To box does not hold a time (FR-3.7)."""
+        time_from, time_to = (parse_time_point(t) if t else None for t in self._range_texts())
         try:
             max_gb = float(self.max_gb_var.get() or 0)
         except ValueError:
@@ -351,6 +373,8 @@ class App:
             camera_map=self.camera_map,
             split_on_gap=self.split_var.get(),
             trip_gap_minutes=self._trip_gap_minutes(),
+            time_from=time_from,
+            time_to=time_to,
             max_part_gb=max_gb,
             reencode=self.reencode_var.get(),
             overwrite=self.overwrite_var.get(),
@@ -395,10 +419,16 @@ class App:
             return
         if self.worker and self.worker.is_alive():
             return
+        try:
+            options = self._options(dry_run)
+        except TimeRangeError as e:
+            messagebox.showwarning(TITLE, f"Time range: {e}")
+            return
         self.cancel.clear()
         self._dry_run = dry_run
+        if dry_run:
+            self._scanned_range = self._range_texts()
         self._save_trip_settings()
-        options = self._options(dry_run)
         self.output_dir = options.output_dir
         self.scan_button.configure(state="disabled")
         self.merge_button.configure(state="disabled")
@@ -429,6 +459,14 @@ class App:
     def _merge(self) -> None:
         if self.row_keys and not self.export_keys:
             messagebox.showwarning(TITLE, "Tick at least one trip to export.")
+            return
+        if self.row_keys and self._range_texts() != self._scanned_range:
+            # The table (and its ticked rows) belongs to the range of the last scan.
+            messagebox.showwarning(
+                TITLE,
+                "The time range was changed after the scan.\n\n"
+                "Press Scan again to see what will be merged, then Merge.",
+            )
             return
         for child in self.progress_frame.winfo_children():
             child.destroy()

@@ -2,9 +2,16 @@
 
 All notable changes to DashCam Merger.
 
-## Unreleased
+## 1.1.0 — 2026-11-10
 
 ### Added
+- **Merge only a time range** (Spec FR-3.7), for when a whole trip is too much. GUI: *Only
+  merge from … to …* boxes, applied by Scan. CLI: `--from TIME` / `--to TIME`. Times are to
+  the minute (`14:05`, or `2026-11-02 14:05` when the footage covers several days); either
+  end may be left empty. Still lossless: whole clips that touch the range are merged, so a
+  file can start/end up to one clip length outside it. Trip numbers and file names stay
+  those of the whole folder; the plan and `merge_report.txt` show the range. New
+  `core/timerange.py`, `tests/test_timerange.py`.
 - **Choose which trips to export** (Spec FR-3.6). GUI: an *Export* checkbox per row of the
   plan table (click a row to tick/untick, *Select all* / *Select none*, "Export N of M
   files"); rows are sorted by trip so Front and Rear of a trip sit together. CLI:
@@ -12,6 +19,9 @@ All notable changes to DashCam Merger.
   `merge_report.txt` list what was not exported.
 
 ### Changed
+- **Build versioning.** `build.bat` takes the version from `dashcam_merger.__version__`
+  (via the new `toolsersion_info.py`): both exes carry it as a Windows version resource
+  (Properties > Details) and the release is named `DashCamMerger_v<version>_win64.zip`.
 - **Trips** (Spec FR-3.5, rev. 2026-10-17): clips are grouped into trips and each trip
   becomes its own file, **on by default**. A break of more than **15 minutes** starts a new
   trip (was: off, 30 min). Set it in the GUI (*Split into trips: new trip after a break of

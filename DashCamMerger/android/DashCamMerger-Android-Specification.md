@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Document version | 1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use `yyyyMMdd_HHmmss`, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after > 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13) |
-| App version | `1.6-android` (versionCode 8; shown next to the title, from `BuildConfig`), package `com.phong.dashcammerger` |
+| Document version | 1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use `yyyyMMdd_HHmmss`, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after > 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13; 1.7 — 2026-11-02: progress tracking — speed, time left, finish time, per-part list, timing in the report, AR-14) |
+| App version | `1.7-android` (versionCode 9; shown next to the title, from `BuildConfig`), package `com.phong.dashcammerger` |
 | Status | Built, installed and verified on a Samsung Galaxy Note 10 (SM-N970F, Android 12) |
 | Source location | `DashCamMerger/android/` in the DashCam Merger repository (commit `51ae98e`, later updates follow) |
 | Parent documents | `../pc/docs/DashCamMerger-Specification.md` (desktop FR-1…FR-12), `../pc/docs/DashCamMerger-Design.md` |
@@ -507,7 +507,8 @@ screen keeps itself on while scanning or merging.
      monospace 11 sp (line height 15 sp), scrolling vertically and horizontally; before
      anything exists: *The plan, the merge report and any errors appear here.*
 4. **AR-12.2** Bottom bar, always visible whichever tab is open: status line (bodyMedium,
-   medium weight); while busy a linear progress bar; button row **Scan & plan** (enabled
+   medium weight); while busy a linear progress bar (while merging: the progress lines of
+   AR-14.5 around it); button row **Scan & plan** (enabled
    when an input folder is set and not busy) plus **Merge <k> file(s)** (state *Planned*,
    enabled when k ≥ 1) or **Cancel** (shown while *Scanning*/*Merging*, enabled only while
    *Merging*).
@@ -531,14 +532,60 @@ One card per token: `<token>  (<n> files, e.g. <first file name>)` and four filt
 | Scanning | Scan & plan / Apply and plan | `Scanning folder…`, `Found <n> clips (<profile> naming). Reading streams…`, `Reading <Camera> clips… d / t` | Scan & plan (disabled), Cancel (disabled) |
 | NeedCameraMap | no profile ≥ 90 % | `Camera naming not recognised - please assign each group` | Scan & plan, mapping list |
 | Planned | plan with ≥ 1 part | `Plan ready - choose files, then tap Merge` | Scan & plan, **Merge <k> file(s)** (enabled when ≥ 1 file ticked), Select all / Select none, Order chips, pair switch, checkboxes, ▲ / ▼ |
-| Merging | Merge | `Part i/k: <name>` (k = ticked parts) / `Cancelling…` | Cancel |
-| Done | run finished | `Done - all <n> part(s) verified` / `Finished with problems - <p> of <n> part(s) passed` / `Cancelled - <p> of <n> part(s) finished` | Scan & plan |
+| Merging | Merge | `Part i/k: <name>` (k = ticked parts) / `Part i/k: finishing <name>` (AR-14.5) / `Cancelling…` | Cancel |
+| Done | run finished | `Done - all <n> part(s) verified` / `Finished with problems - <p> of <n> part(s) passed` / `Cancelled - <p> of <n> part(s) finished`, each followed by ` in <elapsed>` (AR-14.7) | Scan & plan |
 | Error | exception, no clips, nothing to merge | `Error` / `No video files found` / `Nothing to merge` | Scan & plan |
 
 A plan is used for one merge only; after *Done* the user rescans (existing outputs then
 get `_2` names, AR-6.4).
 
-### 4.4 Preferences
+### 4.5 Progress tracking (v1.7, AR-14)
+
+Purpose: a merge of a full SD card takes from minutes to over an hour. While it runs the
+user must be able to see, at a glance and also from the notification without opening the
+app, **how far it is, how fast it goes, and when it will be finished**.
+
+- **AR-14.1 Measured quantities.** At Merge the session fixes the run's parts (the ticked
+  parts in merge order, AR-10.14) and `total` = Σ `expectedSize` of those parts. While
+  copying, `done` = compressed sample bytes written so far over all parts; when a part
+  ends (any status) `done` is topped up to the sum of the `expectedSize` of the finished
+  parts, so container overhead never leaves the bar stuck below 100 %. Also tracked: the
+  current part (index i of k, its bytes done / `expectedSize`), the current clip inside it
+  (j of n), the run's start time and the time of the last copied byte. All of this lives in
+  `core/Progress.kt` (`ProgressTracker`, pure Kotlin, unit-tested) and is published to the
+  UI as an immutable `ProgressSnapshot` at most every 500 ms.
+- **AR-14.2 Speed.** Bytes copied over the last 30 s (sliding window, one sample per
+  second at most); before 30 s have passed, the average since the start. Unknown during the
+  first 5 s and until 1 MiB is copied. Shown as `9.2 MB/s` (1 MB = 1 MiB, as `formatSize`).
+- **AR-14.3 Time left and finish time.** remaining = (`total` − `done`) / speed. Shown as
+  `< 1 min`, `N min` (rounded up) under an hour, else `H h MM min`. Estimated finish clock
+  time = now + remaining, `HH:mm`, prefixed `tomorrow ` when it falls on the next day. While
+  the speed is unknown the text is `estimating time left…`.
+- **AR-14.4 Stall.** When no byte has been copied for ≥ 15 s while merging, time left and
+  speed are replaced by `no progress for <elapsed>` (e.g. a slow or disconnected USB reader,
+  or the phone froze the app — AR-13.2), so a stalled run is never shown as "almost done".
+- **AR-14.5 Bottom bar while merging** (replaces the single bar of AR-12.2):
+  1. status line `Part i/k: <name>` (unchanged), or `Part i/k: finishing <name>` while
+     that part's index is written and it is verified;
+  2. progress line (bodySmall): `43 % · 2.10 / 4.90 GB · 9.2 MB/s · 5 min left (done ≈ 21:47)`;
+  3. overall progress bar;
+  4. detail line (bodySmall, muted): `Elapsed 6 min 12 s · this file 61 % · clip 3/20`.
+  Percent is ⌊`done`·100/`total`⌋, capped at 99 until the run ends. Elapsed and the stall
+  check are refreshed every second by a UI ticker even when no bytes arrive.
+- **AR-14.6 Details tab while merging and after.** A **Progress** card above the text lists
+  every part of the run in merge order: `▶ <name> 61 %` (running), `○ <name>` (waiting),
+  `✓ <name> · 3 min 05 s` (PASS), `✗ <name>` (FAIL or cancelled). Shown from Merge until the
+  next Scan & plan.
+- **AR-14.7 Notification** (AR-13): title `Merging 43 % · 5 min left` (or
+  `Merging 43 %` while estimating/stalled); text
+  `Part 2/5 · 2.10 / 4.90 GB · done ≈ 21:47` (or the stall text); progress bar = overall
+  percent. The *done* notification and the final status get ` in <elapsed>`, e.g.
+  `Done - all 3 part(s) verified in 15 min 34 s`.
+- **AR-14.8 Report.** `merge_report.txt` and the Details text end with
+  `Time: 2026-11-02 21:13:44 - 21:29:18 (15 min 34 s), 4.70 GB at 9.1 MB/s average`
+  (Android only, appended after the shared report text; the desktop report is unchanged).
+
+### 4.6 Preferences
 
 `SharedPreferences` file `dashcam_merger`: `tree_uri` (input), `output_tree_uri`
 (output), `split_on_gap` (bool, default true), `trip_gap_minutes` (int, default 15),
@@ -567,6 +614,7 @@ DashCamMerger/android/
       Ordering.kt  timestamp/sequence parsing, sort, gaps
       Planner.kt   probe orchestration, split, naming, uniqueName
       Report.kt    plan summary, report text, formatters
+      Progress.kt  ProgressTracker, ProgressSnapshot, PartRunState, progress texts (AR-14)
     android/
       SafStorage.kt   SafScanner (scan, describe, stat) + OutputFolder (write guard)
       MediaProbe.kt   track selection, probe, output duration
@@ -575,6 +623,7 @@ DashCamMerger/android/
       MergeService.kt foreground service keeping scan/merge alive with the screen off (AR-13)
       MainActivity.kt Compose UI
   app/src/test/java/com/phong/dashcammerger/core/CoreTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/ProgressTest.kt
 ```
 
 ### 5.2 Data model (`core/Models.kt`)
@@ -614,7 +663,9 @@ Mirrors desktop `pipeline.run()`:
    `arrange(byTime)`, `move(pos, delta)`; pure helpers in `core/Arrange.kt`) and taps
    **Merge** (the explicit FR-2.4 step).
 4. **Merge** (background thread): for each **ticked** part, in `order` `Merger.mergePart` (write partial → verify
-   → rename) → source check → write report → *Done*.
+   → rename) → source check → write report (+ AR-14.8 timing line) → *Done*. A `ProgressTracker`
+   (AR-14.1) is fed from `mergePart`'s `onBytes` / `onClip` / `onFinishing` callbacks and published as `snapshot`,
+   together with `runParts`, `partStates` and `partSeconds` (AR-14.6).
 
 `MergeSession` is a process-level singleton holding Compose `mutableStateOf` fields, so a
 configuration change does not lose a running merge (the activity additionally declares
@@ -720,7 +771,7 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 
 ## 9. Verification
 
-### 9.1 Unit tests (`CoreTest`, JVM, all passing)
+### 9.1 Unit tests (`CoreTest`, `ProgressTest`, JVM, all passing)
 
 | Test | Checks |
 |---|---|
@@ -746,6 +797,8 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | `codecChangeInsideATripNumbersPartsPerTrip` | `_trip1`, `_trip2_part1`, `_trip2_part2`; labels `trip 2/2 part 1/2` |
 | `planSummaryListsTripsWithTimes` | `Front trip 1/2: 2026-08-31 15:25:00 - 15:27:00, 2 clips, 0:02:00` + output name line |
 
+`ProgressTest` (AR-14, all passing): speed unknown for the first 5 s / 1 MiB then averaged; speed over the last 30 s only (20 → 5 MiB/s); percent, time left, finish clock and the full progress line; stall ≥ 15 s hides time left; *estimating time left…*; finished parts count fully and percent stays ≤ 99; detail line and notification text; duration / remaining / speed texts; finish time on the next day; report timing line.
+
 ### 9.2 Device acceptance tests (Note 10, 2026-09-27)
 
 | ID | Procedure | Expected | Result |
@@ -764,6 +817,7 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | DT-9 | Open app; Scan & plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |
 | DT-10 | v1.6 build 7: 4 Vietmap clips (USB reader `Vietmap_M1/Test`, 1.27 GB) → `DashTest`; Merge, then power button | Merge finishes with the screen off | 2026-11-02: **Fail** — progress notification and wake lock OK, but Samsung Freecess froze the app 2 min after screen-off (1.13 / 1.24 GB); resumed and PASSed when the screen came on. Led to AR-13.2 |
 | DT-11 | v1.6 build 8, same clips; Merge → *Stop optimizing battery usage?* → Allow, then power button | Whole merge with the screen off, no freeze | 2026-11-02: **Pass** — file grew ~9 MB/s, screen *Dozing* throughout, no Freecess freeze, `.partial` renamed after verification, report PASS / sources untouched, *Done - all 1 part(s) verified* notification. All 31 284 samples identical to the DT-10 output (only header times and final-chunk interleave differ) |
+| DT-12 | v1.7 build 9: merge several files (e.g. a whole trip folder) and watch the bottom bar, the Details tab and the notification; once turn the screen off, once unplug nothing | Percent, size, speed, time left and finish clock appear after ~5 s and stay plausible; *this file* % and *clip j/n* advance; *finishing* shown at each part end; Details lists ✓/▶/○ per part; notification title shows % and time left; final status and report end with the elapsed time | **Pending** (planned 2026-11-03) |
 
 Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
 design; colourful output from those clips is not a defect.

@@ -61,7 +61,7 @@
 | Run id | `runId = datetime.now().strftime("%Y%m%d_%H%M%S")`. Used in log file name and temp folder. |
 | Threads | GUI: the core runs in one `threading.Thread`; cancellation via `threading.Event`. CLI: same core function, called directly on the main thread. |
 | Camera labels | Exactly three strings: `"Front"`, `"Rear"`, `"Interior"`. Anything else is `"Unclassified"` or `"Skip"`. |
-| Version string | `__version__ = "1.0.0"` in `dashcam_merger/__init__.py`. |
+| Version string | `__version__ = "1.1.0"` in `dashcam_merger/__init__.py` - the single source: `build.bat` reads it via `toolsersion_info.py` for the exe version resource and the zip name. |
 
 ---
 
@@ -250,6 +250,8 @@ class RunOptions:                         # everything the CLI/GUI can set per r
     trip_gap_minutes: float | None = None # None -> config gap_split_seconds (FR-3.5b)
     trips: set[int] | None = None         # FR-3.6b, CLI --trips; None = all
     selected_parts: set[str] | None = None  # FR-3.6a, planner.part_key() of ticked GUI rows
+    time_from: TimePoint | None = None    # FR-3.7, TimePoint(time, day | None); None = open
+    time_to: TimePoint | None = None
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False
@@ -585,9 +587,18 @@ Steps (in order):
      `opt.selected_parts` (if set) contains `part_key(part)` = `f"{camera}|{first clip name}"`
      — stable between Scan and Merge. The rest go to `MergePlan.not_selected`; no ffmpeg
      command is built for them. Unknown trip numbers add a warning. (FR-3.6)
-   - Then `_number_trips(reasons)` gives every part `trip_index`, `trip_count`, `trip_part`,
-     `trip_parts` (a `trip gap` reason starts a new trip). Only codec-change / max-size splits
-     add a "new part started because of …" warning.
+   - Then `_trip_of_clips(chunks)` maps every clip of the whole group to its trip (a
+     `trip gap` reason starts a new trip) and `_number_trips` gives every part `trip_index`,
+     `trip_count`, `trip_part`, `trip_parts`. Only codec-change / max-size splits add a
+     "new part started because of …" warning.
+   - Time range (FR-3.7, `core/timerange.py`): `resolve_range(opt.time_from, opt.time_to,
+     days)` runs right after ordering (step 2b) and raises `TimeRangeError`, which
+     `pipeline.run` turns into `UsageError`. With a range, the group's clips are filtered
+     with `timerange.overlaps` (clip start < *to* and clip start + probed duration > *from*)
+     and `_split_group` runs again on the kept clips only; trip numbers still come from the
+     whole-group map above. A group without timestamps or without a clip in the range is
+     skipped with a warning. `MergePlan.time_range` holds `timerange.describe(...)` for the
+     summary and the report.
    - `max part size`: `max_part_gb > 0` and `current_part_bytes + clip.size_bytes > max_part_gb * 1024**3` and the current part is not empty. (FR-6.8)
 7. **Name outputs** (FR-6.3): `first = part.clips[0]`, `last = part.clips[-1]`;
    `ts(c) = c.timestamp.strftime("%Y%m%d%H%M%S") if c.timestamp else c.path.stem`;
@@ -839,6 +850,8 @@ CLI and GUI):
 --no-split-on-gap     store_const False } (default None -> config value)
 --trip-gap-minutes N  float > 0 -> RunOptions.trip_gap_minutes
 --trips LIST          cli.parse_trips("1,3,5-7") -> RunOptions.trips (FR-3.6b)
+--from TIME           timerange.parse_time_point -> RunOptions.time_from (FR-3.7)
+--to TIME             timerange.parse_time_point -> RunOptions.time_to (FR-3.7)
 --max-part-gb FLOAT
 --reencode            store_true
 --overwrite           store_true
@@ -899,7 +912,7 @@ Row 6: ScrolledText log pane (height 10, state disabled, appended programmatical
 Menu:  File -> Open config.json | Open logs folder | Exit ;  Help -> About
 ```
 
-Window title `"DashCam Merger 1.0.0"`, `geometry("760x560")`, `minsize(640, 480)`.
+Window title `"DashCam Merger <__version__>"`, `geometry("760x560")`, `minsize(640, 480)`.
 
 ### 9.2 Behaviour
 
@@ -907,6 +920,10 @@ Window title `"DashCam Merger 1.0.0"`, `geometry("760x560")`, `minsize(640, 480)
   ticked keys (all after a Scan). `<Button-1>` on a cell and `<space>` on selected rows call
   `_toggle`. Merge passes `selected_parts=set(export_keys)`; a Scan passes None. The `plan`
   event of a Merge run (only the ticked parts) does not refill the table (`_dry_run` flag).
+- Time range (FR-3.7): two entries (`time_from_var`, `time_to_var`) in a third options row
+  (grid row 8). `_options` parses them with `timerange.parse_time_point`; a bad text shows a
+  warning and no run starts. A Scan stores the texts in `_scanned_range`; Merge refuses
+  (warning: scan again) when the boxes differ from it, so part keys always match the table.
 - Trip settings (FR-10.3): `App(cfg, config_path)`; `main()` passes `app_dir() / "config.json"`
   (tests pass None, nothing is saved). On Scan/Merge, `_save_trip_settings()` calls
   `config.save_settings(path, {"split_on_gap", "gap_split_seconds"})` when the values changed;
@@ -1076,8 +1093,8 @@ pyinstaller --noconfirm --onedir --console --name DashCamMerger-cli ^
 copy /y dist\DashCamMerger-cli\DashCamMerger-cli.exe dist\DashCamMerger\
 copy /y README.txt dist\DashCamMerger\
 if not exist dist\DashCamMerger\logs mkdir dist\DashCamMerger\logs
-powershell -Command "Compress-Archive -Force dist\DashCamMerger\* DashCamMerger_v1.0_win64.zip"
-powershell -Command "(Get-FileHash DashCamMerger_v1.0_win64.zip -Algorithm SHA256).Hash" > DashCamMerger_v1.0_win64.sha256
+powershell -Command "Compress-Archive -Force dist\DashCamMerger\* DashCamMerger_v%VERSION%_win64.zip"
+powershell -Command "(Get-FileHash DashCamMerger_v%VERSION%_win64.zip -Algorithm SHA256).Hash" > DashCamMerger_v%VERSION%_win64.sha256
 endlocal
 ```
 
@@ -1108,6 +1125,7 @@ outputs and logs go, the "never deletes your clips" promise, and the ffmpeg vers
 | FR-3.3 | planner step 2 warning |
 | FR-3.4 | ordering.detect_gaps, planner step 5 |
 | FR-3.5 | planner step 6 `trip gap` |
+| FR-3.7 | timerange.py, planner step 2b + range filter, cli.py `--from` / `--to`, gui.py From/To boxes |
 | FR-4.1 | probe.sample_indices, planner step 3 |
 | FR-4.2 | models.StreamSignature, probe.signature_from_json |
 | FR-4.3 | planner step 6 (single part, stream copy) |

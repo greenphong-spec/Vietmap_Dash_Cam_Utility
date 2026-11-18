@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.phong.dashcammerger.R
+import com.phong.dashcammerger.core.Progress
 
 /**
  * AR-13: keeps a scan or merge running with the screen off or the app in the background.
@@ -113,17 +114,28 @@ class MergeService : Service() {
 
     private fun progressNotification(session: MergeSession): Notification {
         val merging = session.phase == Phase.Merging
-        val pct = (session.progress * 100).toInt().coerceIn(0, 100)
+        val pct = session.snapshot?.takeIf { merging }?.percent
+            ?: (session.progress * 100).toInt().coerceIn(0, 100)
         val cancel = PendingIntent.getService(
             this, 1,
             Intent(this, MergeService::class.java).setAction(ACTION_CANCEL),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // AR-14.7: percent, time left and finish clock time from the live snapshot.
+        val now = System.currentTimeMillis()
+        val snap = session.snapshot.takeIf { merging }
+        val title = when {
+            snap != null -> Progress.notificationTitle(snap, now)
+            merging -> "Merging dashcam clips – $pct %"
+            else -> "Scanning dashcam clips"
+        }
+        val text = snap?.let { Progress.notificationText(it, now) } ?: session.status
+        val big = if (snap != null) "$text\n${session.status}" else session.status
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_merge)
-            .setContentTitle(if (merging) "Merging dashcam clips – $pct %" else "Scanning dashcam clips")
-            .setContentText(session.status)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(session.status))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(big))
             .setProgress(100, pct, !merging)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

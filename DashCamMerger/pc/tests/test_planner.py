@@ -298,3 +298,74 @@ def test_select_parts_by_key(env):
 def test_no_selection_exports_everything(env):
     plan = plan_for(front_and_rear_trips(), env)
     assert len(plan.parts) == 4 and plan.not_selected == []
+
+
+# ---- time range (FR-3.7)
+def _point(text):
+    from dashcam_merger.core.timerange import parse_time_point
+
+    return parse_time_point(text)
+
+
+def test_time_range_keeps_only_overlapping_clips(env):
+    # 1-min clips at 15:25:16 ... 15:34:16
+    plan = plan_for([make_clip(i) for i in range(10)], env,
+                    time_from=_point("15:28"), time_to=_point("15:31"))
+    assert len(plan.parts) == 1
+    part = plan.parts[0]
+    assert [c.sequence for c in part.clips] == [2, 3, 4, 5]  # 15:27:16 reaches into 15:28
+    assert part.expected_duration == 240.0 and part.expected_size == 4000
+    assert part.output_path.name == "Front_20260831152716_to_20260831153016.mp4"
+    assert plan.time_range == "2026-08-31 15:28 to 15:31"
+
+
+def test_time_range_open_ends(env):
+    clips = [make_clip(i) for i in range(10)]
+    assert len(plan_for(clips, env, time_from=_point("15:30")).parts[0].clips) == 6
+    plan = plan_for(clips, env, time_from=None, time_to=_point("15:30"))
+    assert len(plan.parts[0].clips) == 5
+    assert plan.time_range == "until 2026-08-31 15:30"
+
+
+def test_time_range_keeps_whole_card_trip_numbers(env):
+    # Three trips an hour apart; the range cuts into trip 2 only.
+    minutes = [0, 1, 60, 61, 62, 63, 120, 121]
+    clips = [make_clip(i, minutes=m) for i, m in enumerate(minutes)]
+    plan = plan_for(clips, env, time_from=_point("16:26"), time_to=_point("16:28"))
+    assert len(plan.parts) == 1
+    part = plan.parts[0]
+    assert (part.trip_index, part.trip_count) == (2, 3)
+    assert [c.sequence for c in part.clips] == [2, 3, 4]  # 16:25:16 runs into 16:26
+    assert part.output_path.name.endswith("_trip2.mp4")
+
+
+def test_time_range_applies_to_every_camera(env):
+    clips = [make_clip(i) for i in range(6)] + [make_clip(i, camera="Rear") for i in range(6)]
+    plan = plan_for(clips, env, time_from=_point("15:27"), time_to=_point("15:29"))
+    assert [(p.camera, len(p.clips)) for p in plan.parts] == [("Front", 3), ("Rear", 3)]
+
+
+def test_time_range_outside_the_footage_gives_no_parts(env):
+    plan = plan_for([make_clip(i) for i in range(3)], env, time_from=_point("18:00"))
+    assert plan.parts == []
+    assert any("no clips in the time range" in w for w in plan.warnings)
+
+
+def test_time_only_range_on_multi_day_footage_is_rejected(env):
+    from dashcam_merger.core.timerange import TimeRangeError
+
+    clips = [make_clip(0), make_clip(1, minutes=24 * 60)]
+    with pytest.raises(TimeRangeError, match="several days"):
+        plan_for(clips, env, time_from=_point("15:00"))
+    plan = plan_for(clips, env, time_from=_point("2026-09-01 15:00"))
+    assert [c.sequence for p in plan.parts for c in p.clips] == [1]
+
+
+def test_time_range_without_timestamps_leaves_camera_out(env):
+    clips = [make_clip(i) for i in range(3)]
+    for clip in clips:
+        clip.timestamp = None
+        clip.path = clip.path.with_name(f"clip_{clip.sequence:04d}F.MP4")
+    plan = plan_for(clips, env, time_from=_point("2026-08-31 15:00"))
+    assert plan.parts == []
+    assert any("time range cannot be applied" in w for w in plan.warnings)
