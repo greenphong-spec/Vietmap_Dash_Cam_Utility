@@ -56,7 +56,8 @@ li{margin:3px 0}
 <a class="l3" href="#41-layout-top-to-bottom-v13-tabbed">4.1 Layout (top to bottom, v1.3 tabbed)</a>
 <a class="l3" href="#42-camera-mapping-list-ar-34">4.2 Camera-mapping list (AR-3.4)</a>
 <a class="l3" href="#43-state-machine">4.3 State machine</a>
-<a class="l3" href="#44-preferences">4.4 Preferences</a>
+<a class="l3" href="#45-progress-tracking-v17-ar-14">4.5 Progress tracking (v1.7, AR-14)</a>
+<a class="l3" href="#46-preferences">4.6 Preferences</a>
 <a class="l2" href="#5-architecture">5. Architecture</a>
 <a class="l3" href="#51-source-layout">5.1 Source layout</a>
 <a class="l3" href="#52-data-model-coremodelskt">5.2 Data model (`core/Models.kt`)</a>
@@ -67,7 +68,7 @@ li{margin:3px 0}
 <a class="l2" href="#7-error-handling-and-edge-cases">7. Error handling and edge cases</a>
 <a class="l2" href="#8-known-limitations">8. Known limitations</a>
 <a class="l2" href="#9-verification">9. Verification</a>
-<a class="l3" href="#91-unit-tests-coretest-jvm-all-passing">9.1 Unit tests (`CoreTest`, JVM, all passing)</a>
+<a class="l3" href="#91-unit-tests-coretest-progresstest-jvm-all-passing">9.1 Unit tests (`CoreTest`, `ProgressTest`, JVM, all passing)</a>
 <a class="l3" href="#92-device-acceptance-tests-note-10-2026-09-27">9.2 Device acceptance tests (Note 10, 2026-09-27)</a>
 <a class="l3" href="#93-re-running-the-acceptance-test">9.3 Re-running the acceptance test</a>
 <a class="l2" href="#10-rebuild-checklist">10. Rebuild checklist</a></nav><main><h1 id="dashcam-merger-for-android-specification-as-built">DashCam Merger for Android — Specification (as built)</h1>
@@ -81,11 +82,11 @@ li{margin:3px 0}
 <tbody>
 <tr>
 <td>Document version</td>
-<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after &gt; 15 min, configurable, AR-6.1/6.3/6.5)</td>
+<td>1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use <code>yyyyMMdd_HHmmss</code>, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after &gt; 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13; 1.7 — 2026-11-02: progress tracking — speed, time left, finish time, per-part list, timing in the report, AR-14; 1.8 — 2026-11-23: merge only a time range, AR-6.6, synced with PC FR-3.7; 1.9 — 2026-11-23: trip trim, AR-6.7, synced with PC FR-3.8)</td>
 </tr>
 <tr>
 <td>App version</td>
-<td><code>1.4-android</code> (versionCode 5), package <code>com.phong.dashcammerger</code></td>
+<td><code>1.9-android</code> (versionCode 12; shown next to the title, from <code>BuildConfig</code>), package <code>com.phong.dashcammerger</code></td>
 </tr>
 <tr>
 <td>Status</td>
@@ -133,7 +134,8 @@ reader on USB-OTG), without a PC.</p>
 <li>No deletion of source clips (desktop FR-12 <code>--delete-source</code> is <strong>not</strong> ported). The app
   never deletes any file.</li>
 <li>No <code>config.json</code>, no user-defined camera profiles, no CLI, no parallel merge jobs.</li>
-<li>No background/foreground service: merging runs while the app is open (screen kept on).</li>
+<li>No resuming after the process dies (force stop, power off, reboot): a merge survives
+  screen-off and app switching only (AR-13).</li>
 <li>No network access, no analytics, no storage permissions.</li>
 </ul>
 <hr />
@@ -165,7 +167,7 @@ reader on USB-OTG), without a PC.</p>
 </tr>
 <tr>
 <td>Permissions in manifest</td>
-<td><strong>None</strong>. Folder access is granted per folder through the system picker (Storage Access Framework, persisted URI permissions).</td>
+<td><strong>No storage permissions</strong>: folder access is granted per folder through the system picker (Storage Access Framework, persisted URI permissions). Since v1.6 only the background-running ones (AR-13, §5.4).</td>
 </tr>
 </tbody>
 </table>
@@ -240,7 +242,15 @@ gradlew.bat assembleDebug           # app\build\outputs\apk\debug\app-debug.apk 
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 </code></pre>
 <p>Wireless debugging: <em>Settings → Developer options → Wireless debugging</em>, then
-<code>adb pair &lt;ip&gt;:&lt;pairing-port&gt;</code> and <code>adb connect &lt;ip&gt;:&lt;port&gt;</code>.</p>
+<code>adb pair &lt;ip&gt;:&lt;pairing-port&gt;</code> and <code>adb connect &lt;ip&gt;:&lt;port&gt;</code>.
+The two ports differ: the pairing port and code come from the <em>Pair device with pairing code</em>
+popup (single use, closed after pairing); the connect port is the <em>IP address &amp; Port</em> line on
+the Wireless debugging screen itself. On the Note 10 the connect port is often not advertised
+over mDNS, so <code>adb devices</code> stays empty after pairing until <code>adb connect</code> is given that port.
+Never <code>adb connect</code> to a pairing port: it spoils the code.</p>
+<p><strong>Versioning.</strong> <code>versionCode</code> / <code>versionName</code> in <code>app/build.gradle.kts</code> are bumped for every
+build handed to a phone (<code>versionCode</code> +1 per build, <code>versionName</code> <code>&lt;major&gt;.&lt;minor&gt;-android</code>)
+and shown next to the title from <code>BuildConfig</code> (<code>buildFeatures.buildConfig = true</code>).</p>
 <p><code>local.properties</code> (not committed) holds <code>sdk.dir=C\:\\Android\\Sdk</code>.</p>
 <hr />
 <h2 id="3-functional-requirements">3. Functional requirements</h2>
@@ -451,6 +461,65 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 - <strong>AR-6.4</strong> Collisions (FR-6.2): if the name exists in the output folder, or was already
   given to another part in this plan, try <code>&lt;stem&gt;_2.mp4</code>, <code>&lt;stem&gt;_3.mp4</code>, … until free.
   Existing files are never overwritten.
+- <strong>AR-6.6 Time range (v1.8, PC FR-3.7).</strong> Setup has two boxes <em>Only merge from</em> [From]
+  [To] (empty = open end), read when <strong>Scan &amp; plan</strong> is tapped and not remembered between
+  runs. Each is <code>HH:MM</code> or <code>YYYY-MM-DD HH:MM</code> (<code>14h05</code>, <code>14.05</code>, seconds and <code>/</code> or <code>.</code> in
+  the date are accepted; <code>core/TimeRange.kt</code>, a port of <code>timerange.py</code>).
+  - A box that does not parse stops the scan before anything is read and shows
+    <code>not a time: '&lt;text&gt;' (use HH:MM or YYYY-MM-DD HH:MM, …)</code> in red under the boxes.
+  - Resolving (<code>TimeRange.resolve</code>, before probing): a time without a date takes the other
+    end's date, else the footage's only day; footage over several days without a date, or
+    no timestamps at all, is an error (state <em>Error</em>, status <code>Time range: &lt;message&gt;</code>). A
+    time-only <em>To</em> at or before <em>From</em> means the next day; two dated ends out of order are
+    an error.
+  - Lossless: every <strong>whole clip</strong> with any part inside [From, To) is kept
+    (<code>start &lt; To</code> and <code>start + probed duration &gt; From</code>), so a file may start / end up to
+    one clip length outside the range. Clips outside it are never opened for merging.
+  - Trip numbers, <code>tripCount</code> and output names stay those of the <strong>whole card</strong>
+    (e.g. <code>…_trip2.mp4</code>, label <code>trip 2/10</code>); a range across a trip gap gives one file per
+    trip. Gap warnings are only given between two kept clips. A camera with no clip in
+    the range, or without filename timestamps, is left out with a warning; nothing left at
+    all → status <code>Nothing to merge in the time range</code>.
+  - The Files tab shows <code>Time range: &lt;range&gt; (whole clips)</code> above the list, and the plan
+    text and <code>merge_report.txt</code> carry the same line (after <code>Unreadable:</code> / before
+    <code>Not selected</code> respectively). <code>&lt;range&gt;</code> is <code>2026-11-21 14:20 to 14:26</code>,
+    <code>from …</code> or <code>until …</code>; the end keeps its date only on another day.
+  - If the boxes are edited after a scan, the Merge button is replaced by the red text
+    <em>Time range changed - tap Scan &amp; plan again</em> (PC FR-3.7f).
+- <strong>AR-6.7 Trip trim (v1.9, PC FR-3.8).</strong> Cuts the beginning and/or end off one trip (e.g.
+  a long stop while parked with the camera running) without touching the other trips.
+  - On the Files tab every row whose clips have filename timestamps has a small
+    <strong>✂ Trip time</strong> button next to its label (<strong>✂ Trimmed</strong> once that trip is trimmed);
+    it opens the trim dialog for that row's trip, all cameras, so the Front and the Rear
+    row of a trip open the same dialog (the PC has the same button as its Trim column,
+    FR-3.8a).
+  - The dialog (<code>TrimDialog</code> in <code>MainActivity</code>, logic in <code>core/TripTrim.kt</code> <code>TrimModel</code>, a
+    port of the PC <code>TrimDialog</code>) shows <code>Trip 2/10 (Front, Rear): &lt;start&gt; to &lt;end&gt; - 44:54
+    min</code>, one timeline bar per camera (kept clips in the primary colour, cut clips grey,
+    red Start/End marks, minute ticks: about eight whatever the length) and a <strong>Start</strong> and
+    an <strong>End</strong> slider lined up with the bars. Under each slider: date and time and minutes
+    from the trip start (<code>2026-11-21 14:39:29   +25:24 min of 44:54</code>), and <code>&lt;</code> / <code>&gt;</code> to
+    move by one clip. Summary: <code>Keeps 25:23 min, cuts 19:32 min (Front 9/11 files, Rear
+    9/11 files)</code>. Buttons <em>Whole trip</em>, <em>Cancel</em>, <em>OK</em>.
+  - Lossless, as AR-6.6: the sliders snap to clip boundaries and whole clips are merged.
+    Boundaries of different cameras ≤ 5 s apart are one snap point (starts: the latest,
+    ends: the earliest), so every camera is cut at the same clip. Start stays before End.
+  - OK stores (first kept clip start, last kept clip end) per trip in
+    <code>MergeSession.tripTrims</code> (OK on the whole trip removes the trim) and re-plans at once
+    from the already probed clips (<code>PlanOptions.tripRanges</code>, windows from
+    <code>TimeRange.clipWindow</code>, which pulls each end in by 1 s so touching neighbours are not
+    caught). Unlike the PC, which applies trims at Merge, the Android plan <em>is</em> what
+    Merge writes, so the re-plan happens here; status <code>Trimmed trips: 2</code>.
+  - The trip's rows then show the trimmed clips, length, size, start/end and output name,
+    and a ✂ after the label. Ticks and the list order are kept (matched by
+    <code>OutputPart.key</code> = camera + first clip of the untrimmed part, <code>Arrange.carryOver</code>).
+    Trip numbers stay those of the whole card. The dialog always shows the scanned
+    (untrimmed) trip, so a trim can be widened again. A new Scan clears all trims.
+  - Combines with the AR-6.6 time range (a clip must satisfy both). A camera with no
+    clip left in a trimmed trip gets the warning <code>Front trip 2: no clips in the trimmed
+    time</code>; footage without filename timestamps cannot be trimmed (no ✂ button).
+  - The plan text and <code>merge_report.txt</code> show one line per trimmed trip after the time
+    range line: <code>Trimmed trip 2: 2026-11-21 14:14:06 to 14:39:30 (whole clips)</code>.
 - <strong>AR-6.5</strong> Each part is first written as <code>&lt;final stem&gt;.partial.mp4</code>.</p>
 <h3 id="37-merging-lossless-stream-copy">3.7 Merging (lossless stream copy)</h3>
 <ul>
@@ -645,6 +714,11 @@ Free space there: 128.28 GB
 <td>off</td>
 <td>AR-6.1 rule 3, 3.9 GiB limit (FAT32 cannot hold files ≥ 4 GiB)</td>
 </tr>
+<tr>
+<td><code>Only merge from</code> [From] [To] (text boxes, <em>Clear</em> button when filled)</td>
+<td>empty</td>
+<td>AR-6.6; <strong>not</strong> persisted</td>
+</tr>
 </tbody>
 </table>
 <p>Fixed values: output subfolder <code>merged</code>, gap warning 300 s, match threshold 90 %. No
@@ -678,7 +752,8 @@ screen keeps itself on while scanning or merging.</p>
      monospace 11 sp (line height 15 sp), scrolling vertically and horizontally; before
      anything exists: <em>The plan, the merge report and any errors appear here.</em></li>
 <li><strong>AR-12.2</strong> Bottom bar, always visible whichever tab is open: status line (bodyMedium,
-   medium weight); while busy a linear progress bar; button row <strong>Scan &amp; plan</strong> (enabled
+   medium weight); while busy a linear progress bar (while merging: the progress lines of
+   AR-14.5 around it); button row <strong>Scan &amp; plan</strong> (enabled
    when an input folder is set and not busy) plus <strong>Merge <k> file(s)</strong> (state <em>Planned</em>,
    enabled when k ≥ 1) or <strong>Cancel</strong> (shown while <em>Scanning</em>/<em>Merging</em>, enabled only while
    <em>Merging</em>).</li>
@@ -728,13 +803,13 @@ screen keeps itself on while scanning or merging.</p>
 <tr>
 <td>Merging</td>
 <td>Merge</td>
-<td><code>Part i/k: &lt;name&gt;</code> (k = ticked parts) / <code>Cancelling…</code></td>
+<td><code>Part i/k: &lt;name&gt;</code> (k = ticked parts) / <code>Part i/k: finishing &lt;name&gt;</code> (AR-14.5) / <code>Cancelling…</code></td>
 <td>Cancel</td>
 </tr>
 <tr>
 <td>Done</td>
 <td>run finished</td>
-<td><code>Done - all &lt;n&gt; part(s) verified</code> / <code>Finished with problems - &lt;p&gt; of &lt;n&gt; part(s) passed</code> / <code>Cancelled - &lt;p&gt; of &lt;n&gt; part(s) finished</code></td>
+<td><code>Done - all &lt;n&gt; part(s) verified</code> / <code>Finished with problems - &lt;p&gt; of &lt;n&gt; part(s) passed</code> / <code>Cancelled - &lt;p&gt; of &lt;n&gt; part(s) finished</code>, each followed by <code>in &lt;elapsed&gt;</code> (AR-14.7)</td>
 <td>Scan &amp; plan</td>
 </tr>
 <tr>
@@ -747,7 +822,52 @@ screen keeps itself on while scanning or merging.</p>
 </table>
 <p>A plan is used for one merge only; after <em>Done</em> the user rescans (existing outputs then
 get <code>_2</code> names, AR-6.4).</p>
-<h3 id="44-preferences">4.4 Preferences</h3>
+<h3 id="45-progress-tracking-v17-ar-14">4.5 Progress tracking (v1.7, AR-14)</h3>
+<p>Purpose: a merge of a full SD card takes from minutes to over an hour. While it runs the
+user must be able to see, at a glance and also from the notification without opening the
+app, <strong>how far it is, how fast it goes, and when it will be finished</strong>.</p>
+<ul>
+<li><strong>AR-14.1 Measured quantities.</strong> At Merge the session fixes the run's parts (the ticked
+  parts in merge order, AR-10.14) and <code>total</code> = Σ <code>expectedSize</code> of those parts. While
+  copying, <code>done</code> = compressed sample bytes written so far over all parts; when a part
+  ends (any status) <code>done</code> is topped up to the sum of the <code>expectedSize</code> of the finished
+  parts, so container overhead never leaves the bar stuck below 100 %. Also tracked: the
+  current part (index i of k, its bytes done / <code>expectedSize</code>), the current clip inside it
+  (j of n), the run's start time and the time of the last copied byte. All of this lives in
+  <code>core/Progress.kt</code> (<code>ProgressTracker</code>, pure Kotlin, unit-tested) and is published to the
+  UI as an immutable <code>ProgressSnapshot</code> at most every 500 ms.</li>
+<li><strong>AR-14.2 Speed.</strong> Bytes copied over the last 30 s (sliding window, one sample per
+  second at most); before 30 s have passed, the average since the start. Unknown during the
+  first 5 s and until 1 MiB is copied. Shown as <code>9.2 MB/s</code> (1 MB = 1 MiB, as <code>formatSize</code>).</li>
+<li><strong>AR-14.3 Time left and finish time.</strong> remaining = (<code>total</code> − <code>done</code>) / speed. Shown as
+  <code>&lt; 1 min</code>, <code>N min</code> (rounded up) under an hour, else <code>H h MM min</code>. Estimated finish clock
+  time = now + remaining, <code>HH:mm</code>, prefixed <code>tomorrow</code> when it falls on the next day. While
+  the speed is unknown the text is <code>estimating time left…</code>.</li>
+<li><strong>AR-14.4 Stall.</strong> When no byte has been copied for ≥ 15 s while merging, time left and
+  speed are replaced by <code>no progress for &lt;elapsed&gt;</code> (e.g. a slow or disconnected USB reader,
+  or the phone froze the app — AR-13.2), so a stalled run is never shown as "almost done".</li>
+<li><strong>AR-14.5 Bottom bar while merging</strong> (replaces the single bar of AR-12.2):</li>
+<li>status line <code>Part i/k: &lt;name&gt;</code> (unchanged), or <code>Part i/k: finishing &lt;name&gt;</code> while
+     that part's index is written and it is verified;</li>
+<li>progress line (bodySmall): <code>43 % · 2.10 / 4.90 GB · 9.2 MB/s · 5 min left (done ≈ 21:47)</code>;</li>
+<li>overall progress bar;</li>
+<li>detail line (bodySmall, muted): <code>Elapsed 6 min 12 s · this file 61 % · clip 3/20</code>.
+  Percent is ⌊<code>done</code>·100/<code>total</code>⌋, capped at 99 until the run ends. Elapsed and the stall
+  check are refreshed every second by a UI ticker even when no bytes arrive.</li>
+<li><strong>AR-14.6 Details tab while merging and after.</strong> A <strong>Progress</strong> card above the text lists
+  every part of the run in merge order: <code>▶ &lt;name&gt; 61 %</code> (running), <code>○ &lt;name&gt;</code> (waiting),
+  <code>✓ &lt;name&gt; · 3 min 05 s</code> (PASS), <code>✗ &lt;name&gt;</code> (FAIL or cancelled). Shown from Merge until the
+  next Scan &amp; plan.</li>
+<li><strong>AR-14.7 Notification</strong> (AR-13): title <code>Merging 43 % · 5 min left</code> (or
+  <code>Merging 43 %</code> while estimating/stalled); text
+  <code>Part 2/5 · 2.10 / 4.90 GB · done ≈ 21:47</code> (or the stall text); progress bar = overall
+  percent. The <em>done</em> notification and the final status get <code>in &lt;elapsed&gt;</code>, e.g.
+  <code>Done - all 3 part(s) verified in 15 min 34 s</code>.</li>
+<li><strong>AR-14.8 Report.</strong> <code>merge_report.txt</code> and the Details text end with
+  <code>Time: 2026-11-02 21:13:44 - 21:29:18 (15 min 34 s), 4.70 GB at 9.1 MB/s average</code>
+  (Android only, appended after the shared report text; the desktop report is unchanged).</li>
+</ul>
+<h3 id="46-preferences">4.6 Preferences</h3>
 <p><code>SharedPreferences</code> file <code>dashcam_merger</code>: <code>tree_uri</code> (input), <code>output_tree_uri</code>
 (output), <code>split_on_gap</code> (bool, default true), <code>trip_gap_minutes</code> (int, default 15),
 <code>split_fat32</code> (bool), <code>order_by_time</code> (bool, default true, AR-10.15),
@@ -761,7 +881,7 @@ get <code>_2</code> names, AR-6.4).</p>
   app/build.gradle.kts
   app/src/main/AndroidManifest.xml
   app/src/main/res/values/{strings.xml, themes.xml}
-  app/src/main/res/drawable/{ic_launcher_background.xml, ic_launcher_foreground.xml}
+  app/src/main/res/drawable/{ic_launcher_background.xml, ic_launcher_foreground.xml, ic_stat_merge.xml}
   app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
   app/src/main/java/com/phong/dashcammerger/
     core/      (pure Kotlin, no android.* imports, JVM unit-tested)
@@ -770,13 +890,21 @@ get <code>_2</code> names, AR-6.4).</p>
       Ordering.kt  timestamp/sequence parsing, sort, gaps
       Planner.kt   probe orchestration, split, naming, uniqueName
       Report.kt    plan summary, report text, formatters
+      TimeRange.kt time range parse / resolve / overlap, trim window (AR-6.6, AR-6.7)
+      TripTrim.kt  TrimModel: trim dialog snap points, sliders, texts (AR-6.7)
+      Arrange.kt   export order, Front/Rear pairs, carry-over after a trim
+      Progress.kt  ProgressTracker, ProgressSnapshot, PartRunState, progress texts (AR-14)
     android/
       SafStorage.kt   SafScanner (scan, describe, stat) + OutputFolder (write guard)
       MediaProbe.kt   track selection, probe, output duration
       Merger.kt       stream-copy + verify + keep-incomplete
       MergeSession.kt orchestrator / state holder
+      MergeService.kt foreground service keeping scan/merge alive with the screen off (AR-13)
       MainActivity.kt Compose UI
   app/src/test/java/com/phong/dashcammerger/core/CoreTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/ProgressTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/TimeRangeTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/TripTrimTest.kt
 </code></pre>
 <h3 id="52-data-model-coremodelskt">5.2 Data model (<code>core/Models.kt</code>)</h3>
 <table>
@@ -817,15 +945,15 @@ get <code>_2</code> names, AR-6.4).</p>
 </tr>
 <tr>
 <td><code>OutputPart</code></td>
-<td><code>camera</code>, <code>partIndex</code>, <code>partCount</code>, <code>clips</code>, <code>splitReason</code>, <code>expectedDurationUs</code>, <code>expectedSize</code>, mutable <code>outputName</code>; derived <code>partialName</code></td>
+<td><code>camera</code>, <code>partIndex</code>, <code>partCount</code>, <code>clips</code>, <code>splitReason</code>, <code>expectedDurationUs</code>, <code>expectedSize</code>, <code>tripIndex</code>, <code>tripCount</code>, <code>tripPart</code>, <code>tripParts</code>, <code>key</code> (selection id from the untrimmed part, AR-6.7), mutable <code>outputName</code>; derived <code>partialName</code></td>
 </tr>
 <tr>
 <td><code>PlanOptions</code> (data)</td>
-<td><code>outputSubfolder="merged"</code>, <code>gapWarningSeconds=300</code>, <code>gapSplitSeconds=1800</code>, <code>splitOnGap=false</code>, <code>maxPartGb=0.0</code></td>
+<td><code>outputSubfolder="merged"</code>, <code>gapWarningSeconds=300</code>, <code>gapSplitSeconds=900</code>, <code>splitOnGap=true</code>, <code>maxPartGb=0.0</code>, <code>timeFrom</code> / <code>timeTo: TimePoint?</code> (AR-6.6), <code>tripRanges: Map&lt;Int, Pair&lt;LocalDateTime, LocalDateTime&gt;&gt;</code> (AR-6.7)</td>
 </tr>
 <tr>
 <td><code>MergePlan</code></td>
-<td><code>groups</code>, <code>parts</code>, <code>unclassified</code>, <code>unreadable</code>, <code>warnings</code></td>
+<td><code>groups</code>, <code>parts</code>, <code>unclassified</code>, <code>unreadable</code>, <code>warnings</code>, <code>timeRange: String</code> (AR-6.6), <code>tripTrims: List&lt;String&gt;</code> (AR-6.7)</td>
 </tr>
 <tr>
 <td><code>enum PartStatus</code></td>
@@ -861,17 +989,46 @@ nameExists: (String)-&gt;Boolean, onProgress: (String, Int, Int)-&gt;Unit)</code
    <code>arrange(byTime)</code>, <code>move(pos, delta)</code>; pure helpers in <code>core/Arrange.kt</code>) and taps
    <strong>Merge</strong> (the explicit FR-2.4 step).</li>
 <li><strong>Merge</strong> (background thread): for each <strong>ticked</strong> part, in <code>order</code> <code>Merger.mergePart</code> (write partial → verify
-   → rename) → source check → write report → <em>Done</em>.</li>
+   → rename) → source check → write report (+ AR-14.8 timing line) → <em>Done</em>. A <code>ProgressTracker</code>
+   (AR-14.1) is fed from <code>mergePart</code>'s <code>onBytes</code> / <code>onClip</code> / <code>onFinishing</code> callbacks and published as <code>snapshot</code>,
+   together with <code>runParts</code>, <code>partStates</code> and <code>partSeconds</code> (AR-14.6).</li>
 </ol>
 <p><code>MergeSession</code> is a process-level singleton holding Compose <code>mutableStateOf</code> fields, so a
 configuration change does not lose a running merge (the activity additionally declares
 <code>configChanges="orientation|screenSize|screenLayout|keyboardHidden"</code>). Worker threads post
 all UI-state changes to the main looper. Cancellation is an <code>AtomicBoolean</code>.</p>
+<p><strong>AR-13 Background running (v1.6).</strong> <code>scan</code>, <code>applyCameraMap</code> and <code>merge</code> call
+<code>MergeService.start()</code> (from the button tap, so it is allowed to start). <code>MergeService</code> is a
+foreground service (type <code>dataSync</code>) that does no work itself: it makes the process a
+foreground process so Android neither freezes nor kills it when the screen is off or the
+user switches app, holds a <code>PARTIAL_WAKE_LOCK</code> (released at the end; 6 h cap as a safety
+net) so the CPU keeps running, and once a second updates a low-importance notification
+(channel <em>Merge progress</em>: title <em>Merging dashcam clips – N %</em>, the status line, a progress
+bar, a <strong>Cancel</strong> action that calls <code>MergeSession.cancel()</code>; tapping it opens the app). When
+<code>MergeSession.busy</code> turns false it releases the lock, removes that notification, posts a
+<em>done</em> notification with the final status (tap opens the app) and stops itself.
+<code>START_NOT_STICKY</code>: if the process is killed anyway the merge is not resumed (see §7).
+<strong>AR-13.2</strong> Samsung's own freezer (<code>FreecessController</code>, reason <code>LEV</code>) still freezes an app
+that is under battery optimisation about 2 minutes after screen-off, foreground service
+or not, and disables its wake lock (seen on the Note 10, 2026-11-02: merge stalled at
+1.13 of 1.24 GB until the screen came back on). Apps exempt from battery optimisation
+(<em>Unrestricted</em>) are not frozen. So <strong>Merge</strong>, when the app is not exempt, first opens the
+system dialog <code>ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> (<em>Stop optimizing battery usage?</em>)
+once per app run, then starts the merge whatever the answer; the Setup tab shows
+<em>Merging continues with the screen off ✓</em> or <em>Merging pauses when the screen is off</em> with
+an <strong>Allow</strong> button (re-checked on resume).
+Android 13+ asks for the notification permission at first launch; refusing it only hides
+the notification, the merge still runs in the background. The screen-on flag while the
+app is open is kept.</p>
 <h3 id="54-manifest">5.4 Manifest</h3>
 <p>One <code>activity</code> <code>.android.MainActivity</code>, <code>exported="true"</code>, MAIN/LAUNCHER intent filter;
 <code>application</code> with <code>allowBackup="false"</code>, label <code>DashCam Merger</code>, icon
 <code>@mipmap/ic_launcher</code>, theme <code>Theme.DashCamMerger</code> (parent
-<code>android:Theme.Material.NoActionBar</code>). No <code>uses-permission</code> entries.</p>
+<code>android:Theme.Material.NoActionBar</code>). Permissions (v1.6, AR-13): <code>FOREGROUND_SERVICE</code>,
+<code>FOREGROUND_SERVICE_DATA_SYNC</code>, <code>WAKE_LOCK</code>, <code>POST_NOTIFICATIONS</code>, <code>REQUEST_IGNORE_BATTERY_OPTIMIZATIONS</code> (AR-13.2); one <code>service</code>
+<code>.android.MergeService</code>, <code>exported="false"</code>, <code>foregroundServiceType="dataSync"</code>. Still no storage
+permissions. <code>buildFeatures.buildConfig = true</code> so the title can show
+<code>BuildConfig.VERSION_NAME</code> / <code>VERSION_CODE</code>.</p>
 <h3 id="55-launcher-icon">5.5 Launcher icon</h3>
 <p>Adaptive icon: background solid <code>#1F3A5F</code>; foreground vector (108×108 viewport) — white
 rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16h-12z</code>,
@@ -958,6 +1115,11 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <td>size + mtime</td>
 <td>size</td>
 </tr>
+<tr>
+<td>Screen off / background</td>
+<td>n/a (desktop process)</td>
+<td>foreground service + wake lock + battery-optimisation exemption (AR-13)</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -1015,7 +1177,8 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <hr />
 <h2 id="8-known-limitations">8. Known limitations</h2>
 <ul>
-<li>Merging runs in the foreground only; leaving the app for long may let Android stop it.</li>
+<li>A merge survives screen-off and app switching (AR-13), but not the user swiping the app
+  away with <em>Force stop</em>, or a reboot; it is not resumed afterwards.</li>
 <li>Throughput is bounded by the SD card / USB reader (observed ≈ 0.5 GB per minute for
   SD → phone on the Note 10: 9.4 GB in about 15 minutes).</li>
 <li>B-frame streams are copied in decode order with their original timestamps; typical
@@ -1026,7 +1189,7 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 </ul>
 <hr />
 <h2 id="9-verification">9. Verification</h2>
-<h3 id="91-unit-tests-coretest-jvm-all-passing">9.1 Unit tests (<code>CoreTest</code>, JVM, all passing)</h3>
+<h3 id="91-unit-tests-coretest-progresstest-jvm-all-passing">9.1 Unit tests (<code>CoreTest</code>, <code>ProgressTest</code>, JVM, all passing)</h3>
 <table>
 <thead>
 <tr>
@@ -1121,6 +1284,13 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 </tr>
 </tbody>
 </table>
+<p><code>TimeRangeTest</code> (AR-6.6, 9 tests) and <code>TripTrimTest</code> (AR-6.7, 12 tests), all passing:
+ports of the PC <code>test_timerange.py</code> and the time-range / trim cases of <code>test_planner.py</code>
+and <code>test_gui.py</code> — parsing and resolving, whole-clip overlap, the trim window excluding
+touching neighbours, a trim kept to its trip and applied to every camera, selection keys,
+order and ticks carried over, trim + time range, <code>TrimModel</code> snapping (6:02 / 21:00 on a
+Front + Rear trip 2 s apart), slider texts, <code>&lt;</code> / <code>&gt;</code> and <em>Whole trip</em>.</p>
+<p><code>ProgressTest</code> (AR-14, all passing): speed unknown for the first 5 s / 1 MiB then averaged; speed over the last 30 s only (20 → 5 MiB/s); percent, time left, finish clock and the full progress line; stall ≥ 15 s hides time left; <em>estimating time left…</em>; finished parts count fully and percent stays ≤ 99; detail line and notification text; duration / remaining / speed texts; finish time on the next day; report timing line.</p>
 <h3 id="92-device-acceptance-tests-note-10-2026-09-27">9.2 Device acceptance tests (Note 10, 2026-09-27)</h3>
 <table>
 <thead>
@@ -1167,7 +1337,12 @@ rectangle <code>M28,40h52v28h-52z</code>, three navy "frames" <code>M32,46h12v16
 <p>| DT-6 | DT-1 clips; Scan &amp; plan → both rows ticked, <code>Selected: 2 of 2</code>; Select none → Merge disabled; tick only Rear → Merge | Only the Rear file written, PASS; report shows <code>Not selected (skipped by user): 1</code> + Front name; sources unchanged | Not yet run (v1.1) |
 | DT-7 | A plan with ≥ 2 parts per camera (DT-4 card with trip gap, or 3.9 GB split); toggle a camera header; untick <code>_part1</code>, rotate the screen, Merge | Header toggles all of that camera's parts; selection survives rotation; only <code>_part2</code> written, with its planned name | Not yet run (v1.1) |</p>
 <p>| DT-8 | DT-4-style plan (2 trips × Front/Rear); <em>By time</em>; pair switch on; untick Front part 2; ▼ on the first row; Merge | List F1 R1 F2 R2; unticking F2 also unticks R2; merge writes R1 then F1; report lists F2/R2 as not selected | Partly run 2026-10-03 on a Vietmap M1 card (14 parts, 7 F + 7 R): By time gave F1 R1 F2 R2 F3 R3…; unticking Front part 2 gave Front 6/7, Rear 6/7, 12/14 — Pass. Merge not run |</p>
-<p>| DT-9 | Open app; Scan &amp; plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |</p>
+<p>| DT-9 | Open app; Scan &amp; plan; Merge; rotate during each step | Starts on Setup; plan → Files tab full screen with bottom bar visible; Done → Details shows the report; tab kept on rotation | Partly run 2026-10-03: Setup start and auto-switch to Files with bottom bar visible — Pass. Done → Details and rotation not run |
+| DT-10 | v1.6 build 7: 4 Vietmap clips (USB reader <code>Vietmap_M1/Test</code>, 1.27 GB) → <code>DashTest</code>; Merge, then power button | Merge finishes with the screen off | 2026-11-02: <strong>Fail</strong> — progress notification and wake lock OK, but Samsung Freecess froze the app 2 min after screen-off (1.13 / 1.24 GB); resumed and PASSed when the screen came on. Led to AR-13.2 |
+| DT-11 | v1.6 build 8, same clips; Merge → <em>Stop optimizing battery usage?</em> → Allow, then power button | Whole merge with the screen off, no freeze | 2026-11-02: <strong>Pass</strong> — file grew ~9 MB/s, screen <em>Dozing</em> throughout, no Freecess freeze, <code>.partial</code> renamed after verification, report PASS / sources untouched, <em>Done - all 1 part(s) verified</em> notification. All 31 284 samples identical to the DT-10 output (only header times and final-chunk interleave differ) |
+| DT-12 | v1.7 build 9: merge several files (e.g. a whole trip folder) and watch the bottom bar, the Details tab and the notification; once turn the screen off, once unplug nothing | Percent, size, speed, time left and finish clock appear after ~5 s and stay plausible; <em>this file</em> % and <em>clip j/n</em> advance; <em>finishing</em> shown at each part end; Details lists ✓/▶/○ per part; notification title shows % and time left; final status and report end with the elapsed time | <strong>Pending</strong> (planned 2026-11-03) |</p>
+<p>| DT-13 | v1.8 build 10, Galaxy Z Flip 4, Vietmap M1 card over USB (20 files, 10 trips over 2026-11-21/22): From <code>14:20814:26</code>; then <code>14:20</code>–<code>14:26</code>; then <code>2026-11-21 14:20</code>–<code>14:26</code>; Merge to <code>Phone:/Movies</code> | Bad text rejected with the hint; time-only on a 2-day card → status <code>Time range: … give the date too</code>; dated range → Front/Rear trip 2/10, 3 clips each | 2026-11-23: <strong>Pass</strong> — both outputs PASS 0:09:00 (972 MB / 668 MB), report has <code>Time range: 2026-11-21 14:20 to 14:26 (whole clips)</code>. A merge to the (full) card itself failed with <code>writeSampleData returned an error</code> |
+| DT-14 | v1.9 build 11, same phone and card: Scan; ✂ on Front trip 2/10 (build 12: <em>✂ Trip time</em> button); End <code>&lt;</code> twice; OK; tick only trip 2 Front + Rear; Merge to <code>Phone:/Movies</code> | Dialog: 44:54 min trip, End at <code>14:39:29 +25:24 min</code>, <code>Front 9/11 files, Rear 9/11 files</code>; rows show ✂, 9 clips, 0:25:24; ticks and order kept | 2026-11-23: <strong>Pass</strong> — both outputs PASS (9 files, 0:25:24 / 0:25:23, 2.55 / 1.75 GB), report has <code>Trimmed trip 2: 2026-11-21 14:14:06 to 14:39:30 (whole clips)</code>, sources untouched, 5 min 31 s at 13.3 MB/s |</p>
 <p>Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
 design; colourful output from those clips is not a defect.</p>
 <h3 id="93-re-running-the-acceptance-test">9.3 Re-running the acceptance test</h3>

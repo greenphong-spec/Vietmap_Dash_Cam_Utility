@@ -176,3 +176,22 @@ def test_trips_parsed():
 def test_bad_trips_rejected(value):
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--input", "D:/x", "--trips", value])
+
+
+# ---- time range (FR-3.7)
+def test_from_and_to_parsed():
+    from datetime import date, time
+
+    from dashcam_merger.core.models import TimePoint
+
+    opt = parse(["--input", "D:/x", "--from", "2026-11-02 14:05", "--to", "14:30"])
+    assert opt.time_from == TimePoint(time(14, 5), date(2026, 11, 2))
+    assert opt.time_to == TimePoint(time(14, 30))
+    assert parse(["--input", "D:/x"]).time_from is None
+
+
+@pytest.mark.parametrize("value", ["25:00", "soon", "2026-11-02"])
+def test_bad_from_rejected(value):
+    with pytest.raises(SystemExit) as info:
+        parse(["--input", "D:/x", "--from", value])
+    assert info.value.code == 2

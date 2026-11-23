@@ -21,6 +21,7 @@ from .core.pipeline import (
 )
 from .core.progress import CallbackSink, ProgressEvent, describe
 from .core.report import build_plan_summary
+from .core.timerange import TimeRangeError, parse_time_point
 
 log = logging.getLogger("dashcam_merger.cli")
 
@@ -62,6 +63,14 @@ def parse_trips(text: str) -> set[int]:
     return trips
 
 
+def _time_point(text: str):
+    """'14:05' or '2026-11-02 14:05' (FR-3.7)."""
+    try:
+        return parse_time_point(text)
+    except TimeRangeError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="DashCamMerger",
@@ -88,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--trips", type=parse_trips, metavar="LIST",
         help="export only these trips, e.g. 2 or 1,3,5-7 (see the plan / --dry-run)",
+    )
+    parser.add_argument(
+        "--from", dest="time_from", type=_time_point, metavar="TIME",
+        help='merge only from this time on: HH:MM or "YYYY-MM-DD HH:MM" (whole clips)',
+    )
+    parser.add_argument(
+        "--to", dest="time_to", type=_time_point, metavar="TIME",
+        help='merge only up to this time: HH:MM or "YYYY-MM-DD HH:MM" (whole clips)',
     )
     parser.add_argument("--max-part-gb", type=float, help="split outputs at N GB (0 = unlimited)")
     parser.add_argument("--reencode", action="store_true", help="re-encode mixed formats (slow)")
@@ -197,6 +214,8 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         split_on_gap=args.split_on_gap,
         trip_gap_minutes=args.trip_gap_minutes,
         trips=args.trips,
+        time_from=args.time_from,
+        time_to=args.time_to,
         max_part_gb=args.max_part_gb,
         reencode=args.reencode,
         overwrite=args.overwrite,

@@ -12,7 +12,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -60,6 +60,8 @@ class Extraction:
     #: Rejected frames read again, and how many of those gave a new usable reading.
     second_looked: int = 0
     second_look_changed: int = 0
+    #: (video name, error) of videos that could not be read to the end (damaged file, ...).
+    failed: List[Tuple[str, str]] = field(default_factory=list)
 
     @property
     def title(self) -> str:
@@ -102,6 +104,18 @@ def test_frame(video: Path, profile: OverlayProfile, at_sec: float = 10.0) -> Op
     return None
 
 
+def _guarded(frames_iter: Iterable, failed: List[Tuple[str, str]], name: str) -> Iterator:
+    """
+    Yields from frames_iter; a decoding error ends that video and is added to failed instead
+    of stopping the whole run. Only errors raised by frames_iter itself are caught, not
+    those of the loop that consumes it (e.g. OCR).
+    """
+    try:
+        yield from frames_iter
+    except Exception as e:  # damaged / truncated file, unsupported codec, ...
+        failed.append((name, str(e) or type(e).__name__))
+
+
 def extract(
     videos: Sequence[Path],
     profile: OverlayProfile,
@@ -126,6 +140,7 @@ def extract(
             durations.append(0.0)
     total = max(sum(durations), 1.0)
     collected: List[Sample] = []
+    failed: List[Tuple[str, str]] = []
     pool = OcrPool()
     n_workers = workers or default_workers()
     in_flight = n_workers * 3
@@ -149,7 +164,8 @@ def extract(
                     on_progress(Progress(index, len(videos), video.name, pos, durations[index],
                                          len(collected), min((before + pos) / total, 1.0)))
 
-            for pos, crop in frames.sample(str(video), interval_sec, profile.crop, cancel, on_progress=progress):
+            sampled = frames.sample(str(video), interval_sec, profile.crop, cancel, on_progress=progress)
+            for pos, crop in _guarded(sampled, failed, video.name):
                 pending.append((pos, ex.submit(pool.read, crop)))
                 if len(pending) >= in_flight:
                     drain_one()
@@ -162,7 +178,8 @@ def extract(
             collected, looked, changed = _second_look(videos, profile, collected, track, ex, cancel, on_progress)
             if changed:
                 track = cleaner.clean(collected, profile)
-    return Extraction(videos, profile, collected, track, time.monotonic() - started, cancel.is_set(), looked, changed)
+    return Extraction(videos, profile, collected, track, time.monotonic() - started, cancel.is_set(), looked, changed,
+                      failed)
 
 
 # Frames worth a second look: unreadable, or read but rejected as a likely misread.
@@ -189,7 +206,9 @@ def _second_look(videos, profile, samples, track, ex, cancel, on_progress):
     for v in sorted({samples[i].video_index for i in todo}):
         idx = [i for i in todo if samples[i].video_index == v]
         decoded = frames.frames_at(str(videos[v]), [samples[i].pos_sec for i in idx], profile.crop, cancel)
-        for i, (pos, crop) in zip(idx, decoded):
+        # A damaged video is already reported by the first pass; here it only ends its second look.
+        for k, pos, crop in _guarded(decoded, [], videos[v].name):
+            i = idx[k]
             if abs(pos - samples[i].pos_sec) > 1e-3:
                 continue  # not the frame that was read the first time
             futures.append((i, ex.submit(second_look, crop, samples[i].text, accept)))
@@ -220,6 +239,8 @@ def summary(x: Extraction, zone: Zone) -> str:
                   f"{x.second_look_changed} gave a new reading\n")
     if t.rejected:
         lines += "Dropped: " + ", ".join(f"{v} {k.label}" for k, v in t.rejected.items()) + "\n"
+    for name, error in x.failed:
+        lines += f"Could not read {name} to the end (damaged file?): {error}\n"
     secs = int(x.seconds)
     lines += f"\nRead {len(x.samples)} frames in {secs // 60} min {secs % 60} s"
     if x.cancelled:

@@ -169,7 +169,7 @@ li{margin:3px 0}
 </tr>
 <tr>
 <td>Version string</td>
-<td><code>__version__ = "1.0.0"</code> in <code>dashcam_merger/__init__.py</code>.</td>
+<td><code>__version__ = "1.1.0"</code> in <code>dashcam_merger/__init__.py</code> - the single source: <code>build.bat</code> reads it via <code>toolsersion_info.py</code> for the exe version resource and the zip name.</td>
 </tr>
 </tbody>
 </table>
@@ -352,6 +352,8 @@ class RunOptions:                         # everything the CLI/GUI can set per r
     trip_gap_minutes: float | None = None # None -&gt; config gap_split_seconds (FR-3.5b)
     trips: set[int] | None = None         # FR-3.6b, CLI --trips; None = all
     selected_parts: set[str] | None = None  # FR-3.6a, planner.part_key() of ticked GUI rows
+    time_from: TimePoint | None = None    # FR-3.7, TimePoint(time, day | None); None = open
+    time_to: TimePoint | None = None
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False
@@ -647,9 +649,18 @@ def sample_indices(n: int, every: int) -&gt; list[int]
      <code>opt.selected_parts</code> (if set) contains <code>part_key(part)</code> = <code>f"{camera}|{first clip name}"</code>
      — stable between Scan and Merge. The rest go to <code>MergePlan.not_selected</code>; no ffmpeg
      command is built for them. Unknown trip numbers add a warning. (FR-3.6)</li>
-<li>Then <code>_number_trips(reasons)</code> gives every part <code>trip_index</code>, <code>trip_count</code>, <code>trip_part</code>,
-     <code>trip_parts</code> (a <code>trip gap</code> reason starts a new trip). Only codec-change / max-size splits
-     add a "new part started because of …" warning.</li>
+<li>Then <code>_trip_of_clips(chunks)</code> maps every clip of the whole group to its trip (a
+     <code>trip gap</code> reason starts a new trip) and <code>_number_trips</code> gives every part <code>trip_index</code>,
+     <code>trip_count</code>, <code>trip_part</code>, <code>trip_parts</code>. Only codec-change / max-size splits add a
+     "new part started because of …" warning.</li>
+<li>Time range (FR-3.7, <code>core/timerange.py</code>): <code>resolve_range(opt.time_from, opt.time_to,
+     days)</code> runs right after ordering (step 2b) and raises <code>TimeRangeError</code>, which
+     <code>pipeline.run</code> turns into <code>UsageError</code>. With a range, the group's clips are filtered
+     with <code>timerange.overlaps</code> (clip start &lt; <em>to</em> and clip start + probed duration &gt; <em>from</em>)
+     and <code>_split_group</code> runs again on the kept clips only; trip numbers still come from the
+     whole-group map above. A group without timestamps or without a clip in the range is
+     skipped with a warning. <code>MergePlan.time_range</code> holds <code>timerange.describe(...)</code> for the
+     summary and the report.</li>
 <li><code>max part size</code>: <code>max_part_gb &gt; 0</code> and <code>current_part_bytes + clip.size_bytes &gt; max_part_gb * 1024**3</code> and the current part is not empty. (FR-6.8)</li>
 <li><strong>Name outputs</strong> (FR-6.3): <code>first = part.clips[0]</code>, <code>last = part.clips[-1]</code>;
    <code>ts(c) = c.timestamp.strftime("%Y%m%d%H%M%S") if c.timestamp else c.path.stem</code>;
@@ -868,6 +879,8 @@ CLI and GUI):
 --no-split-on-gap     store_const False } (default None -&gt; config value)
 --trip-gap-minutes N  float &gt; 0 -&gt; RunOptions.trip_gap_minutes
 --trips LIST          cli.parse_trips(&quot;1,3,5-7&quot;) -&gt; RunOptions.trips (FR-3.6b)
+--from TIME           timerange.parse_time_point -&gt; RunOptions.time_from (FR-3.7)
+--to TIME             timerange.parse_time_point -&gt; RunOptions.time_to (FR-3.7)
 --max-part-gb FLOAT
 --reencode            store_true
 --overwrite           store_true
@@ -931,7 +944,8 @@ Row 2: [Button &quot;Scan&quot;] [Checkbutton &quot;Re-encode if formats differ 
        [Checkbutton &quot;Overwrite existing outputs&quot;] [Checkbutton &quot;Delete original clips after successful merge
        (cannot be undone)&quot; - FR-12, default unchecked]
 Row 3: Treeview, one row per OutputPart, sorted by (trip_index, trip_part):
-       Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec
+       Export ☑/☐ | Camera | Trip | Trim | Files | Duration | Size | Start | End | Codec
+       (Trim = &quot;✂ Trip time&quot; / &quot;✂ Trimmed&quot;, a click opens TrimDialog for the row's trip, FR-3.8a)
        (height 8, vertical scrollbar; Trip = report.part_label, Start/End = report.part_span)
 Row 4 (after the three buttons): [Button &quot;Select all&quot;] [Button &quot;Select none&quot;] [Label &quot;Export N of M files&quot;]
 Row 7: [Checkbutton &quot;Split into trips: new trip after a break of more than&quot; = cfg.split_on_gap]
@@ -942,13 +956,17 @@ Row 5: Frame &quot;progress_frame&quot;: one row per part -&gt; Label(name) + tt
 Row 6: ScrolledText log pane (height 10, state disabled, appended programmatically)
 Menu:  File -&gt; Open config.json | Open logs folder | Exit ;  Help -&gt; About
 </code></pre>
-<p>Window title <code>"DashCam Merger 1.0.0"</code>, <code>geometry("760x560")</code>, <code>minsize(640, 480)</code>.</p>
+<p>Window title <code>"DashCam Merger &lt;__version__&gt;"</code>, <code>geometry("760x560")</code>, <code>minsize(640, 480)</code>.</p>
 <h3 id="92-behaviour">9.2 Behaviour</h3>
 <ul>
 <li>Export selection (FR-3.6a): <code>row_keys</code> maps row id → <code>part_key</code>; <code>export_keys</code> holds the
   ticked keys (all after a Scan). <code>&lt;Button-1&gt;</code> on a cell and <code>&lt;space&gt;</code> on selected rows call
   <code>_toggle</code>. Merge passes <code>selected_parts=set(export_keys)</code>; a Scan passes None. The <code>plan</code>
   event of a Merge run (only the ticked parts) does not refill the table (<code>_dry_run</code> flag).</li>
+<li>Time range (FR-3.7): two entries (<code>time_from_var</code>, <code>time_to_var</code>) in a third options row
+  (grid row 8). <code>_options</code> parses them with <code>timerange.parse_time_point</code>; a bad text shows a
+  warning and no run starts. A Scan stores the texts in <code>_scanned_range</code>; Merge refuses
+  (warning: scan again) when the boxes differ from it, so part keys always match the table.</li>
 <li>
 <p>Trip settings (FR-10.3): <code>App(cfg, config_path)</code>; <code>main()</code> passes <code>app_dir() / "config.json"</code>
   (tests pass None, nothing is saved). On Scan/Merge, <code>_save_trip_settings()</code> calls
@@ -1241,8 +1259,8 @@ pyinstaller --noconfirm --onedir --console --name DashCamMerger-cli ^
 copy /y dist\DashCamMerger-cli\DashCamMerger-cli.exe dist\DashCamMerger\
 copy /y README.txt dist\DashCamMerger\
 if not exist dist\DashCamMerger\logs mkdir dist\DashCamMerger\logs
-powershell -Command &quot;Compress-Archive -Force dist\DashCamMerger\* DashCamMerger_v1.0_win64.zip&quot;
-powershell -Command &quot;(Get-FileHash DashCamMerger_v1.0_win64.zip -Algorithm SHA256).Hash&quot; &gt; DashCamMerger_v1.0_win64.sha256
+powershell -Command &quot;Compress-Archive -Force dist\DashCamMerger\* DashCamMerger_v%VERSION%_win64.zip&quot;
+powershell -Command &quot;(Get-FileHash DashCamMerger_v%VERSION%_win64.zip -Algorithm SHA256).Hash&quot; &gt; DashCamMerger_v%VERSION%_win64.sha256
 endlocal
 </code></pre>
 <p><code>app_dir()</code> in the frozen build is <code>dist\DashCamMerger\</code>, so <code>ffmpeg\</code> and <code>config.json</code> sit beside the
@@ -1318,6 +1336,10 @@ outputs and logs go, the "never deletes your clips" promise, and the ffmpeg vers
 <tr>
 <td>FR-3.5</td>
 <td>planner step 6 <code>trip gap</code></td>
+</tr>
+<tr>
+<td>FR-3.7</td>
+<td>timerange.py, planner step 2b + range filter, cli.py <code>--from</code> / <code>--to</code>, gui.py From/To boxes</td>
 </tr>
 <tr>
 <td>FR-4.1</td>

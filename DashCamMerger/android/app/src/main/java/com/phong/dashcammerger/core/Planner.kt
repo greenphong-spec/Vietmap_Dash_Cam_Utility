@@ -1,5 +1,6 @@
 package com.phong.dashcammerger.core
 
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -38,8 +39,12 @@ object Planner {
         }
     }
 
-    /** Walk the ordered clips and start a new part whenever a rule fires. */
-    fun splitGroup(group: CameraGroup, opt: PlanOptions): List<Pair<List<ClipInfo>, String>> {
+    /** Walk the ordered clips (default: the whole group); a rule that fires starts a new part. */
+    fun splitGroup(
+        group: CameraGroup,
+        opt: PlanOptions,
+        clips: List<ClipInfo> = group.clips,
+    ): List<Pair<List<ClipInfo>, String>> {
         val maxBytes = if (opt.maxPartGb > 0) opt.maxPartGb * GIB else 0.0
         // FR-3.5: computed here, not from group.gaps, so the trip gap is independent of the
         // gap-warning threshold; only meaningful when the clips are ordered by time.
@@ -52,7 +57,7 @@ object Planner {
         var reason = ""
         var previous: ClipInfo? = null
 
-        for (clip in group.clips) {
+        for (clip in clips) {
             var newReason = ""
             if (current.isNotEmpty()) {
                 val sig = clip.probe?.signature
@@ -106,6 +111,12 @@ object Planner {
             }
         }
 
+        // 2b. Time range (FR-3.7), resolved before probing so a bad range fails fast.
+        val days = groups.flatMap { g -> g.clips.mapNotNull { it.timestamp?.toLocalDate() } }.toSet()
+        val (begin, stop) = TimeRange.resolve(opt.timeFrom, opt.timeTo, days)
+        val ranged = begin != null || stop != null
+        val trimmedSpans = sortedMapOf<Int, MutableList<ClipInfo>>() // FR-3.8
+
         val parts = mutableListOf<OutputPart>()
         for (group in groups) {
             // 3. Probe.
@@ -131,16 +142,60 @@ object Planner {
             // 5. Gaps (FR-3.4) and 6. split into parts. A gap that starts a new trip is shown
             // by the trip list itself, so only stops inside a trip are warned about (FR-3.5e).
             Ordering.detectGaps(group, opt.gapWarningSeconds)
-            val chunks = splitGroup(group, opt)
+            var chunks = splitGroup(group, opt)
+            // Trip numbers always come from the whole card (FR-3.6c), also inside a range.
+            val wholeTrips = numberTrips(chunks.map { it.second })
+            val tripOf = HashMap<ClipInfo, Int>()
+            chunks.forEachIndexed { i, (chunkClips, _) -> chunkClips.forEach { tripOf[it] = wholeTrips[i][0] } }
+            val cardTrips = wholeTrips.lastOrNull()?.get(1) ?: 1
+            // Selection keys come from the untrimmed parts, so trimming keeps them (FR-3.6).
+            val keyOf = HashMap<ClipInfo, String>()
+            for ((chunkClips, _) in chunks) chunkClips.forEach { keyOf[it] = "${group.camera}|${chunkClips.first().name}" }
+            var kept: Set<ClipInfo> = group.clips.toSet()
+            val tripNumbers = tripOf.values.toSet()
+            var trims = opt.tripRanges.filterKeys { it in tripNumbers }
+            if (trims.isNotEmpty() && group.orderSource != OrderSource.Timestamp) {
+                warnings.add(
+                    "${group.camera}: no timestamps in the file names, the trip trim " +
+                        "cannot be applied - trip kept whole"
+                )
+                trims = emptyMap()
+            }
+            if (ranged || trims.isNotEmpty()) {
+                // FR-3.7 / FR-3.8: keep whole clips that overlap the range and their trip's
+                // trim window, then split those.
+                if (ranged && group.orderSource != OrderSource.Timestamp) {
+                    warnings.add(
+                        "${group.camera}: no timestamps in the file names, the time range " +
+                            "cannot be applied - camera left out"
+                    )
+                    continue
+                }
+                val inRange = group.clips.filter { clip ->
+                    (!ranged || TimeRange.overlaps(clip, begin, stop)) &&
+                        (trims[tripOf.getValue(clip)]?.let { TimeRange.overlaps(clip, it.first, it.second) } ?: true)
+                }
+                for (trip in trims.keys.sorted()) {
+                    val inTrip = inRange.filter { tripOf.getValue(it) == trip }
+                    if (inTrip.isEmpty()) warnings.add("${group.camera} trip $trip: no clips in the trimmed time")
+                    trimmedSpans.getOrPut(trip) { mutableListOf() }.addAll(inTrip)
+                }
+                if (inRange.isEmpty()) {
+                    if (ranged) warnings.add("${group.camera}: no clips in the time range")
+                    continue
+                }
+                kept = inRange.toSet()
+                chunks = splitGroup(group, opt, inRange)
+            }
             val tripStarts = chunks.filter { it.second == "trip gap" }.map { it.first.first() }.toSet()
             for (gap in group.gaps) {
-                if (gap.after in tripStarts) continue
+                if (gap.after in tripStarts || gap.before !in kept || gap.after !in kept) continue
                 warnings.add(
                     "${group.camera}: gap of ${"%.1f".format(gap.seconds / 60)} min between " +
                         "${gap.before.name} and ${gap.after.name}"
                 )
             }
-            val trips = numberTrips(chunks.map { it.second })
+            val trips = numberTrips(chunks.map { tripOf.getValue(it.first.first()) }, cardTrips)
             chunks.forEachIndexed { i, (chunkClips, reason) ->
                 val index = i + 1
                 val (trip, tripCount, tripPart, tripParts) = trips[i]
@@ -157,6 +212,7 @@ object Planner {
                         tripCount = tripCount,
                         tripPart = tripPart,
                         tripParts = tripParts,
+                        key = keyOf.getValue(chunkClips.first()),
                     )
                 )
                 if (reason.isNotEmpty() && reason != "trip gap") {
@@ -175,8 +231,24 @@ object Planner {
             taken.add(part.outputName)
         }
 
-        return MergePlan(groups, parts, unclassified, unreadable, warnings)
+        val trims = trimmedSpans.filterValues { it.isNotEmpty() }.map { (trip, kept) ->
+            clipsSpan(kept)?.let { (a, b) -> TimeRange.describeTrim(trip, a, b) } ?: "trip $trip"
+        }
+        return MergePlan(groups, parts, unclassified, unreadable, warnings, TimeRange.describe(begin, stop), trims)
     }
+
+    /** Stable id of an output part across a trim (FR-3.6): camera + first clip of the untrimmed part. */
+    fun partKey(part: OutputPart): String = part.key.ifEmpty { "${part.camera}|${part.clips.first().name}" }
+
+    /** Recording start of the earliest clip and end of the latest one; null without timestamps. */
+    fun clipsSpan(clips: List<ClipInfo>): Pair<LocalDateTime, LocalDateTime>? {
+        val stamped = clips.filter { it.timestamp != null }
+        if (stamped.isEmpty()) return null
+        return stamped.minOf { it.timestamp!! } to stamped.maxOf { clipEnd(it) }
+    }
+
+    /** Start plus probed length (no length assumed when unknown, FR-3.4a). */
+    fun clipEnd(clip: ClipInfo): LocalDateTime = clip.timestamp!!.plusNanos((clip.probe?.durationUs ?: 0L) * 1000)
 
     /** (trip, trips, part in trip, parts in trip) per chunk; a `trip gap` reason starts a trip (FR-3.5). */
     fun numberTrips(reasons: List<String>): List<List<Int>> {
@@ -185,12 +257,17 @@ object Planner {
             if (i == 0 || reason == "trip gap") trip++
             trip
         }
+        return numberTrips(tripOf, trip)
+    }
+
+    /** Same, given each chunk's trip number and the whole card's trip count (FR-3.6c / FR-3.7d). */
+    fun numberTrips(tripOf: List<Int>, tripCount: Int): List<List<Int>> {
         val counts = tripOf.groupingBy { it }.eachCount()
         val seen = mutableMapOf<Int, Int>()
         return tripOf.map { t ->
             val n = (seen[t] ?: 0) + 1
             seen[t] = n
-            listOf(t, trip, n, counts.getValue(t))
+            listOf(t, tripCount, n, counts.getValue(t))
         }
     }
 

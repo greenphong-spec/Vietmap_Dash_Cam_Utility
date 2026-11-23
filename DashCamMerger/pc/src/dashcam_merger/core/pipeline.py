@@ -28,6 +28,7 @@ from .models import (
 from .progress import ProgressEvent, ProgressSink
 from .report import build_plan_summary, build_report_text, write_report
 from .safe_io import WriteGuard
+from .timerange import TimeRangeError
 from .verify import sources_untouched, verify_part
 from .config import app_dir
 
@@ -208,10 +209,13 @@ def run(
             )
 
     # 3. Plan.
-    plan = planner.build_plan(
-        clips, cfg, opt, cfg.ffprobe_path, run_id, progress,
-        guard=guard, output_dir=output_dir, temp_dir=temp_dir,
-    )
+    try:
+        plan = planner.build_plan(
+            clips, cfg, opt, cfg.ffprobe_path, run_id, progress,
+            guard=guard, output_dir=output_dir, temp_dir=temp_dir,
+        )
+    except TimeRangeError as e:  # FR-3.7: e.g. a time without a date on a multi-day card
+        raise UsageError(f"Time range: {e}") from e
 
     # 4. Confirm (FR-2.4). The summary is always shown; --yes skips only the wait.
     summary = build_plan_summary(plan)

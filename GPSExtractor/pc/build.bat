@@ -20,10 +20,10 @@ pyinstaller --noconfirm --onedir --console --name DashGPS-cli ^
 copy /y dist\DashGPS-cli\DashGPS-cli.exe dist\DashGPS\ >nul
 copy /y README.md dist\DashGPS\ >nul
 
-powershell -NoProfile -Command "Compress-Archive -Force -Path dist\DashGPS\* -DestinationPath DashGPS_v1.0_win64.zip"
-powershell -NoProfile -Command "(Get-FileHash DashGPS_v1.0_win64.zip -Algorithm SHA256).Hash" > DashGPS_v1.0_win64.sha256
+powershell -NoProfile -Command "Compress-Archive -Force -Path dist\DashGPS\* -DestinationPath DashGPS_v1.1_win64.zip"
+powershell -NoProfile -Command "(Get-FileHash DashGPS_v1.1_win64.zip -Algorithm SHA256).Hash" > DashGPS_v1.1_win64.sha256
 
 echo.
-echo Built dist\DashGPS\ and DashGPS_v1.0_win64.zip
-type DashGPS_v1.0_win64.sha256
+echo Built dist\DashGPS\ and DashGPS_v1.1_win64.zip
+type DashGPS_v1.1_win64.sha256
 endlocal

@@ -2,9 +2,43 @@
 
 All notable changes to DashCam Merger.
 
-## Unreleased
+## 1.2.0 — 2026-11-22
 
 ### Added
+- **Trim a trip** (Spec FR-3.8), to leave a long stop (e.g. parked with the camera
+  running) at the start or end of a trip out of the merge. GUI only: click the *✂ Trip
+  time* cell (new Trim column) of any row of that trip. The pop-up has a timeline per camera and Start
+  / End sliders that show date + time and minutes from the trip start (`+12:02 min of
+  78:02`), snap to clip boundaries (lossless, whole clips) and step one clip with `<` /
+  `>`. Trimmed rows show the new Files/Duration/Size/Start/End, a ✂ after the trip and
+  *✂ Trimmed* in the Trim column; the plan and
+  `merge_report.txt` list each trimmed trip. A new Scan clears the trims. Core:
+  `RunOptions.trip_ranges`, `timerange.clip_window` / `describe_trim`,
+  `planner.clips_span`.
+
+### Changed
+- Export-selection keys (`planner.part_key`) now come from the untrimmed part, stored as
+  `OutputPart.key`, so trimming a trip (FR-3.7 range or FR-3.8 trim) keeps the ticks of
+  the scan. Rows that share a key tick together.
+- Main window default size 900×580 (was 760×560) for the extra Trim column. (An
+  earlier 1.2.0 draft opened the trim from an *Advanced: trim trips* checkbox + a click on
+  Start/End; replaced by the visible per-row button, as in the Android app.)
+
+### Not yet ported
+- Nothing: the FR-3.7 time range was ported in Android 1.8 (`core/TimeRange.kt`, spec
+  AR-6.6) and the FR-3.8 trip trim in Android 1.9 (`core/TripTrim.kt`, spec AR-6.7; a small
+  *✂ Trip time* button on every file of the Files tab, re-plans at once).
+
+## 1.1.0 — 2026-11-10
+
+### Added
+- **Merge only a time range** (Spec FR-3.7), for when a whole trip is too much. GUI: *Only
+  merge from … to …* boxes, applied by Scan. CLI: `--from TIME` / `--to TIME`. Times are to
+  the minute (`14:05`, or `2026-11-02 14:05` when the footage covers several days); either
+  end may be left empty. Still lossless: whole clips that touch the range are merged, so a
+  file can start/end up to one clip length outside it. Trip numbers and file names stay
+  those of the whole folder; the plan and `merge_report.txt` show the range. New
+  `core/timerange.py`, `tests/test_timerange.py`.
 - **Choose which trips to export** (Spec FR-3.6). GUI: an *Export* checkbox per row of the
   plan table (click a row to tick/untick, *Select all* / *Select none*, "Export N of M
   files"); rows are sorted by trip so Front and Rear of a trip sit together. CLI:
@@ -12,6 +46,9 @@ All notable changes to DashCam Merger.
   `merge_report.txt` list what was not exported.
 
 ### Changed
+- **Build versioning.** `build.bat` takes the version from `dashcam_merger.__version__`
+  (via the new `toolsersion_info.py`): both exes carry it as a Windows version resource
+  (Properties > Details) and the release is named `DashCamMerger_v<version>_win64.zip`.
 - **Trips** (Spec FR-3.5, rev. 2026-10-17): clips are grouped into trips and each trip
   becomes its own file, **on by default**. A break of more than **15 minutes** starts a new
   trip (was: off, 30 min). Set it in the GUI (*Split into trips: new trip after a break of

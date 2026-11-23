@@ -122,10 +122,12 @@ def sample(
 
 
 def frames_at(path: str, positions: Iterable[float], crop: CropRect,
-              cancel: Optional[threading.Event] = None) -> Iterator[Tuple[float, np.ndarray]]:
+              cancel: Optional[threading.Event] = None) -> Iterator[Tuple[int, float, np.ndarray]]:
     """
-    (position, luma crop) of the keyframe at or before each position - for positions that
-    came from sample(), the very frame read then. The file is opened once.
+    (index into positions, position, luma crop) of the keyframe at or before each position -
+    for positions that came from sample(), the very frame read then. A position whose
+    keyframe cannot be found or decoded yields nothing, so callers match on the index, not
+    on the order. The file is opened once.
     """
     with av.open(path) as c:
         s = _video_stream(c)
@@ -134,7 +136,7 @@ def frames_at(path: str, positions: Iterable[float], crop: CropRect,
         cc.skip_frame = "NONKEY"
         tb = s.time_base
         start_pts = s.start_time or 0
-        for pos in positions:
+        for i, pos in enumerate(positions):
             if cancel is not None and cancel.is_set():
                 return
             c.seek(int(round(pos / tb)) + start_pts, stream=s, backward=True, any_frame=False)
@@ -142,7 +144,7 @@ def frames_at(path: str, positions: Iterable[float], crop: CropRect,
             if pkt is None:
                 continue
             for fr in list(cc.decode(pkt)) + list(cc.decode(None)):
-                yield float((fr.pts - start_pts) * tb), crop_luma(fr, crop)
+                yield i, float((fr.pts - start_pts) * tb), crop_luma(fr, crop)
             cc.flush_buffers()
 
 

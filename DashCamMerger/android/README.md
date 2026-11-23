@@ -52,6 +52,10 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    merged result off the SD card. Leave unset to write to `<input>/merged`.
    **Split into trips** (on by default) writes one file per trip; a break of more than
    **15 min** (change it in the box next to it) starts a new trip.
+   **Only merge from … to …** (optional) keeps just the footage between two times, e.g.
+   `14:20` to `14:26`, or `2026-11-21 14:20` when the card holds several days. Whole
+   clips that touch the range are merged (no re-encoding), so a file can start/end up to
+   one clip length outside it; trip numbers stay those of the whole card.
 3. **Scan & plan** — shows each camera, clip count, codec, the files that will be
    written, and any warnings. If the file naming isn't recognised you assign each group
    to Front/Rear/Interior/Skip.
@@ -63,9 +67,45 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    Front and Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
    **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
    file from the same time.
-4. **Merge** (enabled when at least one file is ticked) — progress bar; the screen stays on while merging (large merges take a few
-   minutes — keep the app in the foreground). **Cancel** keeps the partial file as
-   `INCOMPLETE_DO_NOT_USE_*`.
+   **✂ Trip time** (v1.9, small button on each file) opens that file's trip with
+   a timeline per camera and **Start** / **End** sliders (`<` / `>` move one clip) to cut
+   a long stop off the beginning or end, e.g. parked with the camera running. The sliders
+   snap to whole clips (lossless) and cut every camera of the trip at the same clip; the
+   rows then show the trimmed length and *✂ Trimmed*. A new Scan clears the trims.
+4. **Merge** (enabled when at least one file is ticked) — the screen stays on while the app
+   is open. **Cancel** keeps the partial file as `INCOMPLETE_DO_NOT_USE_*`.
+
+### Progress while merging (v1.7)
+
+Below the status line the app shows how far the merge is and when it will finish:
+
+```
+Part 2/5: Front_20261101_055438_to_20261101_085644_trip9.mp4
+43 % · 2.10 / 4.90 GB · 9.2 MB/s · 5 min left (done ≈ 21:47)
+[██████████░░░░░░░░░░░░░]
+Elapsed 6 min 12 s · this file 61 % · clip 3/20
+```
+
+The speed is measured over the last 30 seconds, so the time left adapts when the card gets
+faster or slower; for the first few seconds it says *estimating time left…*. If nothing is
+copied for 15 s it says *no progress for …* instead of a time. The **Details** tab lists
+every file of the run (✓ done with its time, ▶ running with %, ○ waiting, ✗ failed). The
+notification shows the same percent, time left and finish time, so you don't need to open
+the app. At the end the status says how long it took (e.g. *Done - all 3 part(s) verified
+in 15 min 34 s*) and `merge_report.txt` ends with a `Time:` line (start, end, average speed).
+
+### Screen off / other apps (v1.6)
+
+A merge keeps running when you press the power button, the screen times out, or you
+switch to another app: a notification shows the percentage and current file (with
+**Cancel**) and a second one says when it is done. Samsung phones additionally freeze
+"battery optimised" apps about 2 minutes after the screen goes off, so the first **Merge**
+asks *Stop optimizing battery usage?* — tap **Allow** (or later use the **Allow** button on
+the Setup tab, or *Settings → Apps → DashCam Merger → Battery → Unrestricted*). If denied,
+the merge pauses with the screen off and carries on when it comes back on. Powering off,
+restarting or force-stopping ends a merge; the half-written file stays as `….partial.mp4`.
+
+The app version (e.g. `v1.6-android (8)`) is shown next to the title.
 
 ## Build & install
 
@@ -77,12 +117,20 @@ gradlew.bat assembleDebug          # app\build\outputs\apk\debug\app-debug.apk
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Wireless debugging: `adb pair <ip>:<pair-port>` then `adb connect <ip>:<port>`.
+Wireless debugging: `adb pair <ip>:<pair-port> <code>` (port and code from the *Pair device
+with pairing code* popup), then `adb connect <ip>:<port>` with the **different** port shown as
+*IP address & Port* on the Wireless debugging screen itself. Don't `adb connect` to the
+pairing port — it spoils the code.
+
+Bump `versionCode` (+1) and, for user-visible changes, `versionName` in
+`app/build.gradle.kts` for every build installed on a phone; the title shows both.
 
 ## Layout
 
 - `core/` — pure Kotlin, no Android imports, unit-tested: `Models`, `Cameras`,
-  `Ordering`, `Planner`, `Report` (ports of the Python modules of the same names).
+  `Ordering`, `Planner`, `Report` (ports of the Python modules of the same names), plus
+  the Android-only `Progress` (speed, time left, progress texts; `ProgressTest`).
 - `android/` — `SafStorage` (scanner + `OutputFolder` write guard), `MediaProbe`,
-  `Merger` (stream copy + verify), `MergeSession` (pipeline orchestrator), `MainActivity`
+  `Merger` (stream copy + verify), `MergeSession` (pipeline orchestrator), `MergeService`
+  (foreground service + wake lock + progress notification while busy), `MainActivity`
   (Compose UI).

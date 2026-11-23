@@ -39,12 +39,16 @@ object Merger {
         out: OutputFolder,
         cancel: AtomicBoolean,
         onBytes: (Long) -> Unit,
+        /** AR-14.1: clip j (1-based) of n is being copied. */
+        onClip: (Int, Int) -> Unit = { _, _ -> },
+        /** AR-14.5: all samples written; index being written and the part verified. */
+        onFinishing: () -> Unit = {},
     ): PartResult {
         val started = SystemClock.elapsedRealtime()
         fun elapsed() = SystemClock.elapsedRealtime() - started
 
         val partialUri = out.createFile(part.partialName, "video/mp4")
-        val outcome = copyAll(ctx, part, partialUri, cancel, onBytes)
+        val outcome = copyAll(ctx, part, partialUri, cancel, onBytes, onClip, onFinishing)
 
         if (outcome.cancelled || outcome.error != null) {
             val kept = keepIncomplete(out, partialUri, part)
@@ -97,6 +101,8 @@ object Merger {
         target: Uri,
         cancel: AtomicBoolean,
         onBytes: (Long) -> Unit,
+        onClip: (Int, Int) -> Unit,
+        onFinishing: () -> Unit,
     ): CopyOutcome {
         val pfd = ctx.contentResolver.openFileDescriptor(target, "rw")
             ?: return CopyOutcome("cannot open output for writing", false)
@@ -111,8 +117,9 @@ object Merger {
             var offsetUs = 0L
             var lastAudioOut = -1L
 
-            for (clip in part.clips) {
+            for ((ci, clip) in part.clips.withIndex()) {
                 if (cancel.get()) return CopyOutcome(null, true)
+                onClip(ci + 1, part.clips.size)
                 val ex = MediaExtractor()
                 try {
                     ex.setDataSource(ctx, Uri.parse(clip.uri), null)
@@ -168,6 +175,7 @@ object Merger {
                 }
             }
             if (!muxerStarted) return CopyOutcome("nothing to write", false)
+            onFinishing()
             muxer.stop()
             return CopyOutcome(null, false)
         } catch (e: Exception) {

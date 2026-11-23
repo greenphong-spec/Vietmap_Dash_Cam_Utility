@@ -100,7 +100,7 @@ uses the phone's zone).
 ```
 pip install -r requirements.txt pytest
 python tools\fetch_models.py        # OCR models -> dashgps\models\ (not in git)
-python -m pytest -q                 # 58 tests; set DASHGPS_TEST_VIDEO=<front clip> for test_video.py
+python -m pytest -q                 # 63 tests; set DASHGPS_TEST_VIDEO=<front clip> for test_video.py
 python main.py                      # window; any argument -> command line
 build.bat                           # venv, models, tests, PyInstaller -> dist\DashGPS\ + zip
 ```

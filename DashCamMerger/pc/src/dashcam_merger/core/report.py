@@ -81,6 +81,9 @@ def build_report_text(report: RunReport) -> str:
             )
         )
 
+    if plan.time_range:
+        lines.append(_time_range_line(plan))
+    lines.extend(_trim_lines(plan))
     if plan.not_selected:
         lines.append(_not_selected_line(plan))
     lines.append(
@@ -150,6 +153,16 @@ def _part_lines(plan: MergePlan) -> list[str]:
     return lines
 
 
+def _time_range_line(plan: MergePlan) -> str:
+    """'Time range: 2026-11-02 14:05 to 14:30 (whole clips)' (FR-3.7)."""
+    return f"Time range: {plan.time_range} (whole clips)"
+
+
+def _trim_lines(plan: MergePlan) -> list[str]:
+    """'Trimmed trip 2: 2026-11-02 14:15:00 to 15:02:10 (whole clips)' (FR-3.8)."""
+    return [f"Trimmed {text} (whole clips)" for text in plan.trip_trims]
+
+
 def _not_selected_line(plan: MergePlan) -> str:
     """'Not selected (not exported): 2 of 4 files - Front trip 1/2, Rear trip 1/2'."""
     total = len(plan.parts) + len(plan.not_selected)
@@ -167,6 +180,9 @@ def build_plan_summary(plan: MergePlan) -> str:
         lines.append(f"{group.camera}: {len(group.clips)} files, {format_size(total)}")
     lines.append(f"Unclassified: {len(plan.unclassified)}")
     lines.append(f"Unreadable: {len(plan.unreadable)}")
+    if plan.time_range:
+        lines.append(_time_range_line(plan))
+    lines.extend(_trim_lines(plan))
     lines.append(f"Parts to write: {len(plan.parts)}")
     lines.extend(_part_lines(plan))
     if plan.not_selected:
