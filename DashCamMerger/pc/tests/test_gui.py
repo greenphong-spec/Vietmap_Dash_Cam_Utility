@@ -50,6 +50,7 @@ def test_treeview_columns_match_spec(app):
         "Export",
         "Camera",
         "Trip",
+        "Trim",
         "Files",
         "Duration",
         "Size",
@@ -303,3 +304,83 @@ def test_merge_refused_when_range_changed_after_scan(app, tmp_path, monkeypatch)
     app.time_to_var.set("09:00")
     app._merge()
     assert app.worker is None and "Press Scan again" in shown[0][1]
+
+
+# ---- trip trim (FR-3.8)
+def trim_plan(tmp_path):
+    from datetime import timedelta
+
+    plan = fake_plan(tmp_path)
+    # Front and Rear trip 2: ten 3-min clips from 09:00 (Rear 2 s later)
+    for part in plan.parts:
+        if part.trip_index == 2:
+            first = part.clips[0]
+            offset = timedelta(seconds=2 if part.camera == "Rear" else 0)
+            part.clips = []
+            for i in range(10):
+                clip = type(first)(path=first.path.with_name(f"{part.camera}{i}.MP4"),
+                                   size_bytes=1000, mtime=0.0)
+                clip.timestamp = datetime_(9, 0) + offset + timedelta(minutes=3 * i)
+                clip.probe = first.probe
+                part.clips.append(clip)
+    return plan
+
+
+def datetime_(hour, minute, second=0):
+    from datetime import datetime
+
+    return datetime(2026, 10, 14, hour, minute, second)
+
+
+def test_trim_dialog_snaps_and_shows_offsets(app, tmp_path):
+    from dashcam_merger.gui import TrimDialog
+
+    plan = trim_plan(tmp_path)
+    parts = [p for p in plan.parts if p.trip_index == 2]
+    dialog = TrimDialog(app.root, "trip 2/3", parts, None)
+    try:
+        assert dialog.total == 30 * 60 + 2  # Rear ends 2 s after Front
+        assert len(dialog.starts) == 10 and len(dialog.ends) == 10  # cameras share points
+        assert dialog.is_whole()
+        dialog._set_start(7 * 60)  # nearest start: 6:02 (clip 3, latest camera)
+        dialog._set_end(20 * 60)  # nearest end: 21:00 (clip 7, earliest camera)
+        assert dialog.start == 6 * 60 + 2 and dialog.end == 21 * 60
+        assert dialog.start_text.get() == "2026-10-14 09:06:02   +6:02 min"
+        assert dialog.end_text.get() == "2026-10-14 09:21:00   +21:00 min of 30:02"
+        assert [len(dialog.kept(p)) for p in parts] == [5, 5]
+        assert "Front 5/10 files, Rear 5/10 files" in dialog.summary.get()
+        dialog._step("end", 1)
+        assert dialog.end == 24 * 60
+        dialog._set_end(0)  # never before the start
+        assert dialog.end > dialog.start
+        dialog._whole()
+        assert dialog.is_whole()
+    finally:
+        dialog.window.destroy()
+
+
+def test_trip_trim_updates_rows_and_merge_options(app, tmp_path):
+    plan = trim_plan(tmp_path)
+    app.input_var.set(str(tmp_path))
+    app._fill_tree(plan)
+    app.set_trip_trim(2, (datetime_(9, 6, 2), datetime_(9, 21)))
+    trip2 = [v for v in rows(app) if v[2].startswith("trip 2/3")]
+    assert [v[2] for v in trip2] == ["trip 2/3 \u2702"] * 2
+    assert [v[3] for v in trip2] == ["\u2702 Trimmed"] * 2
+    assert [int(v[4]) for v in trip2] == [5, 5]
+    assert trip2[0][7] == "2026-10-14 09:06:00" and trip2[0][8] == "09:21:00"
+    assert app._options(dry_run=True).trip_ranges is None  # a scan shows whole trips
+    opt = app._options(dry_run=False)
+    assert set(opt.trip_ranges) == {2}
+    assert len(opt.selected_parts) == 6  # keys unchanged by the trim
+    app.set_trip_trim(2, None)
+    assert [int(v[4]) for v in rows(app) if v[2].startswith("trip 2/3")] == [10, 10]
+    assert {v[3] for v in rows(app)} == {"\u2702 Trip time"}
+    assert app._options(dry_run=False).trip_ranges is None
+
+
+def test_new_scan_clears_trims(app, tmp_path):
+    app._fill_tree(trim_plan(tmp_path))
+    app.set_trip_trim(2, (datetime_(9, 6, 2), datetime_(9, 21)))
+    app._fill_tree(trim_plan(tmp_path))
+    assert app.trip_trims == {}

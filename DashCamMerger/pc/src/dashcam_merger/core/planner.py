@@ -6,6 +6,7 @@ Covers FR-2.4, FR-3.3-3.5, FR-4.3-4.4, FR-6.3, FR-6.8.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from concurrent.futures import ThreadPoolExecutor
@@ -82,8 +83,12 @@ def _probe_everything(ffprobe: Path, group: CameraGroup, progress: ProgressSink)
 
 
 def part_key(part: OutputPart) -> str:
-    """Stable id of an output part across Scan and Merge (FR-3.6): camera + first clip."""
-    return f"{part.camera}|{part.clips[0].path.name}"
+    """Stable id of an output part across Scan and Merge (FR-3.6): camera + first clip.
+
+    The first clip is that of the untrimmed part, so trimming a trip (FR-3.7 / FR-3.8)
+    does not change its key and the ticked rows of a scan still match at merge time.
+    """
+    return part.key or f"{part.camera}|{part.clips[0].path.name}"
 
 
 def _select(
@@ -191,6 +196,24 @@ def _number_trips(trips: list[int], trip_count: int) -> list[tuple[int, int, int
     return out
 
 
+def clips_span(clips: list[ClipInfo]) -> tuple[datetime, datetime] | None:
+    """Recording start of the earliest clip and end of the latest one; None without times."""
+    stamped = [c for c in clips if c.timestamp is not None]
+    if not stamped:
+        return None
+    start = min(c.timestamp for c in stamped)
+    end = max(
+        c.timestamp + timedelta(seconds=c.probe.duration if c.probe else 0.0) for c in stamped
+    )
+    return start, end
+
+
+def _trim_text(trip: int, kept: list[ClipInfo]) -> str:
+    """What a trip trim keeps, over all cameras (FR-3.8)."""
+    span = clips_span(kept)
+    return timerange.describe_trim(trip, *span) if span else f"trip {trip}"
+
+
 def build_plan(
     clips: list[ClipInfo],
     cfg: AppConfig,
@@ -232,6 +255,8 @@ def build_plan(
     days = {c.timestamp.date() for g in groups for c in g.clips if c.timestamp is not None}
     window = timerange.resolve_range(opt.time_from, opt.time_to, days)
     ranged = window != (None, None)
+    trip_ranges = opt.trip_ranges or {}  # FR-3.8
+    trimmed_spans: dict[int, list[ClipInfo]] = {}
 
     parts: list[OutputPart] = []
     for group in groups:
@@ -259,17 +284,46 @@ def build_plan(
         chunks = _split_group(group, cfg, opt, fully_probed)
         # Trip numbers always come from the whole card (FR-3.6c), also inside a range.
         trip_of, trip_count = _trip_of_clips(chunks)
+        # Selection keys come from the untrimmed parts, so trimming keeps them (FR-3.6).
+        key_of = {
+            id(clip): f"{group.camera}|{chunk_clips[0].path.name}"
+            for chunk_clips, _ in chunks
+            for clip in chunk_clips
+        }
         kept = {id(c) for c in group.clips}
-        if ranged:  # FR-3.7: keep whole clips that overlap the range, then split those
-            if group.order_source != "timestamp":
+        trims = {t: w for t, w in trip_ranges.items() if t in trip_of.values()}
+        if trims and group.order_source != "timestamp":
+            warnings.append(
+                f"{group.camera}: no timestamps in the file names, the trip trim "
+                "cannot be applied - trip kept whole"
+            )
+            trims = {}
+        if ranged or trims:
+            # FR-3.7 / FR-3.8: keep whole clips that overlap the range and their trip's
+            # trim window, then split those.
+            if ranged and group.order_source != "timestamp":
                 warnings.append(
                     f"{group.camera}: no timestamps in the file names, the time range "
                     "cannot be applied - camera left out"
                 )
                 continue
-            in_range = [c for c in group.clips if timerange.overlaps(c, *window)]
+
+            def wanted(clip: ClipInfo) -> bool:
+                if ranged and not timerange.overlaps(clip, *window):
+                    return False
+                trim = trims.get(trip_of[id(clip)])
+                return trim is None or timerange.overlaps(clip, *trim)
+
+            in_range = [c for c in group.clips if wanted(c)]
+            for trip in sorted(trims):
+                if not any(trip_of[id(c)] == trip for c in in_range):
+                    warnings.append(f"{group.camera} trip {trip}: no clips in the trimmed time")
+                trimmed_spans.setdefault(trip, []).extend(
+                    c for c in in_range if trip_of[id(c)] == trip
+                )
             if not in_range:
-                warnings.append(f"{group.camera}: no clips in the time range")
+                if ranged:
+                    warnings.append(f"{group.camera}: no clips in the time range")
                 continue
             kept = {id(c) for c in in_range}
             chunks = _split_group(group, cfg, opt, fully_probed, in_range)
@@ -297,6 +351,7 @@ def build_plan(
                 trip_count=trip_numbers[index - 1][1],
                 trip_part=trip_numbers[index - 1][2],
                 trip_parts=trip_numbers[index - 1][3],
+                key=key_of[id(chunk_clips[0])],
                 expected_duration=sum(
                     c.probe.duration for c in chunk_clips if c.probe is not None
                 ),
@@ -337,6 +392,7 @@ def build_plan(
         warnings=warnings,
         not_selected=not_selected,
         time_range=timerange.describe(*window),
+        trip_trims=[_trim_text(trip, kept) for trip, kept in sorted(trimmed_spans.items()) if kept],
     )
     # 9. Commands (shown by --dry-run).
     plan.ffmpeg_commands = [concat.build_command(cfg.ffmpeg_path, p) for p in parts]

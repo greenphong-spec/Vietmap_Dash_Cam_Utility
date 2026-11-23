@@ -23,6 +23,9 @@ import com.phong.dashcammerger.core.ProgressTracker
 import com.phong.dashcammerger.core.Planner
 import com.phong.dashcammerger.core.Report
 import com.phong.dashcammerger.core.RunReport
+import com.phong.dashcammerger.core.TimeRange
+import com.phong.dashcammerger.core.TimeRangeError
+import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 
 enum class Phase { Idle, Scanning, NeedCameraMap, Planned, Merging, Done, Error }
@@ -58,6 +61,21 @@ object MergeSession {
     var partSeconds by mutableStateOf<List<Long>>(emptyList()); private set
     var snapshot by mutableStateOf<ProgressSnapshot?>(null); private set
 
+    /** FR-3.7: the From/To box texts the shown plan was scanned with, and its range ("" = all). */
+    var scannedRange by mutableStateOf("" to ""); private set
+    var timeRange by mutableStateOf(""); private set
+
+    /**
+     * FR-3.8 trip trims of the shown plan: trip -> (first kept clip start, last kept clip
+     * end). They belong to the last scan, so a new Scan clears them.
+     */
+    var tripTrims by mutableStateOf<Map<Int, Pair<LocalDateTime, LocalDateTime>>>(emptyMap()); private set
+    /** The scan's untrimmed parts: what the trim dialog shows for a trip. */
+    private var scanParts: List<OutputPart> = emptyList()
+
+    /** All cameras' untrimmed parts of one trip (FR-3.8b). */
+    fun tripParts(trip: Int): List<OutputPart> = scanParts.filter { it.tripIndex == trip }
+
     val selectedParts: List<OutputPart> get() = order.filter { it in selected }.map { planParts[it] }
 
     /** AR-14.1: at most two UI updates per second from the copy loop. */
@@ -76,7 +94,9 @@ object MergeSession {
 
     private fun fail(e: Throwable) = ui {
         phase = Phase.Error
-        status = "Error"
+        // FR-3.7c: a range the footage cannot take (e.g. several days, no date) is a usage
+        // error; the status line wraps, the monospace details box does not.
+        status = if (e is TimeRangeError) "Time range: ${e.message}" else "Error"
         text = e.message ?: e.javaClass.simpleName
     }
 
@@ -99,6 +119,9 @@ object MergeSession {
         partStates = emptyList()
         partSeconds = emptyList()
         snapshot = null
+        timeRange = ""
+        tripTrims = emptyMap()
+        scanParts = emptyList()
     }
 
     // AR-10.7: selection edits only apply while a plan is on screen.
@@ -138,10 +161,11 @@ object MergeSession {
     }
 
     /** Steps 1-3: scan, detect cameras, then plan (or stop to ask for a camera map). */
-    fun scan(ctx: Context, tree: Uri, outputTree: Uri?, opt: PlanOptions) {
+    fun scan(ctx: Context, tree: Uri, outputTree: Uri?, opt: PlanOptions, rangeTexts: Pair<String, String> = "" to "") {
         if (busy) return
         val app = ctx.applicationContext
         options = opt
+        scannedRange = rangeTexts
         phase = Phase.Scanning
         status = "Scanning folder…"
         progress = 0f
@@ -195,11 +219,35 @@ object MergeSession {
         }.start()
     }
 
-    private fun buildPlan(app: Context) {
+    /**
+     * FR-3.8: keep only (first clip start, last clip end) of [trip] for every camera, or the
+     * whole trip for null. Re-plans from the probed clips (nothing is read again) and keeps
+     * the list's ticks and order.
+     */
+    fun setTripTrim(ctx: Context, trip: Int, bounds: Pair<LocalDateTime, LocalDateTime>?) {
+        if (phase != Phase.Planned) return
+        val app = ctx.applicationContext
+        tripTrims = if (bounds == null) tripTrims - trip else tripTrims + (trip to bounds)
+        phase = Phase.Scanning
+        status = "Applying trim…"
+        Thread {
+            try {
+                buildPlan(app, retrim = true)
+            } catch (e: Throwable) {
+                fail(e)
+            }
+        }.start()
+    }
+
+    private fun buildPlan(app: Context, retrim: Boolean = false) {
         val out = output!!
         val existing = HashSet<String>()
+        // FR-3.8: a scan always plans whole trips; trims only narrow what is merged.
+        val opt = if (!retrim) options else options.copy(
+            tripRanges = tripTrims.mapValues { (_, b) -> TimeRange.clipWindow(b.first, b.second) },
+        )
         val p = Planner.buildPlan(
-            clips, options,
+            clips, opt,
             probe = { MediaProbe.probe(app, it) },
             nameExists = { name -> name in existing || out.exists(name).also { if (it) existing.add(name) } },
             onProgress = { what, done, total ->
@@ -218,16 +266,28 @@ object MergeSession {
             text = summary
             progress = 0f
             freeBytes = free
+            timeRange = p.timeRange
+            if (retrim) { // same files, same ticks and order, fewer clips
+                val (keptOrder, keptSelected) = Arrange.carryOver(planParts, order, selected, p.parts)
+                order = keptOrder
+                selected = keptSelected
+            } else {
+                scanParts = p.parts
+                selected = p.parts.indices.toSet() // AR-10.6: everything ticked by default
+                order = sortedOrder(p.parts)
+            }
             planParts = p.parts
-            selected = p.parts.indices.toSet() // AR-10.6: everything ticked by default
-            order = sortedOrder(p.parts)
             partners = Arrange.partners(p.parts)
             if (p.parts.isEmpty()) {
                 phase = Phase.Error
-                status = "Nothing to merge"
+                status = if (p.timeRange.isEmpty()) "Nothing to merge" else "Nothing to merge in the time range"
             } else {
                 phase = Phase.Planned
-                status = "Plan ready - choose files, then tap Merge"
+                status = when {
+                    !retrim -> "Plan ready - choose files, then tap Merge"
+                    tripTrims.isEmpty() -> "No trips trimmed"
+                    else -> "Trimmed trips: ${tripTrims.keys.sorted().joinToString(", ")}"
+                }
             }
         }
     }

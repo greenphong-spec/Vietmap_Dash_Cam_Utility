@@ -900,7 +900,8 @@ Row 2: [Button "Scan"] [Checkbutton "Re-encode if formats differ (slow)"]
        [Checkbutton "Overwrite existing outputs"] [Checkbutton "Delete original clips after successful merge
        (cannot be undone)" - FR-12, default unchecked]
 Row 3: Treeview, one row per OutputPart, sorted by (trip_index, trip_part):
-       Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec
+       Export ☑/☐ | Camera | Trip | Trim | Files | Duration | Size | Start | End | Codec
+       (Trim = "✂ Trip time" / "✂ Trimmed", a click opens TrimDialog for the row's trip, FR-3.8a)
        (height 8, vertical scrollbar; Trip = report.part_label, Start/End = report.part_span)
 Row 4 (after the three buttons): [Button "Select all"] [Button "Select none"] [Label "Export N of M files"]
 Row 7: [Checkbutton "Split into trips: new trip after a break of more than" = cfg.split_on_gap]

@@ -944,7 +944,8 @@ Row 2: [Button &quot;Scan&quot;] [Checkbutton &quot;Re-encode if formats differ 
        [Checkbutton &quot;Overwrite existing outputs&quot;] [Checkbutton &quot;Delete original clips after successful merge
        (cannot be undone)&quot; - FR-12, default unchecked]
 Row 3: Treeview, one row per OutputPart, sorted by (trip_index, trip_part):
-       Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec
+       Export ☑/☐ | Camera | Trip | Trim | Files | Duration | Size | Start | End | Codec
+       (Trim = &quot;✂ Trip time&quot; / &quot;✂ Trimmed&quot;, a click opens TrimDialog for the row's trip, FR-3.8a)
        (height 8, vertical scrollbar; Trip = report.part_label, Start/End = report.part_span)
 Row 4 (after the three buttons): [Button &quot;Select all&quot;] [Button &quot;Select none&quot;] [Label &quot;Export N of M files&quot;]
 Row 7: [Checkbutton &quot;Split into trips: new trip after a break of more than&quot; = cfg.split_on_gap]

@@ -369,3 +369,67 @@ def test_time_range_without_timestamps_leaves_camera_out(env):
     plan = plan_for(clips, env, time_from=_point("2026-08-31 15:00"))
     assert plan.parts == []
     assert any("time range cannot be applied" in w for w in plan.warnings)
+
+
+# ---- trip trim (FR-3.8)
+def _trim(first_minute, end_minute):
+    from dashcam_merger.core.timerange import clip_window
+
+    return clip_window(START + timedelta(minutes=first_minute), START + timedelta(minutes=end_minute))
+
+
+def two_trips(camera="Front", offset=0):
+    # trip 1: minutes 0-2, trip 2: minutes 60-69 (60 s clips); Rear starts `offset` s later
+    minutes = [0, 1, 2] + list(range(60, 70))
+    clips = [make_clip(i, camera=camera, minutes=m) for i, m in enumerate(minutes)]
+    for clip in clips:
+        clip.timestamp += timedelta(seconds=offset)
+    return clips
+
+
+def test_trip_trim_keeps_only_the_window_of_that_trip(env):
+    plan = plan_for(two_trips(), env, trip_ranges={2: _trim(62, 67)})
+    trip1, trip2 = plan.parts
+    assert [c.sequence for c in trip1.clips] == [0, 1, 2]  # other trips untouched
+    assert [c.sequence for c in trip2.clips] == [5, 6, 7, 8, 9]  # minutes 62..66
+    assert (trip2.trip_index, trip2.trip_count) == (2, 2)
+    assert trip2.expected_duration == 300.0
+    assert trip2.output_path.name == "Front_20260831162716_to_20260831163116_trip2.mp4"
+    assert plan.trip_trims == ["trip 2: 2026-08-31 16:27:16 to 16:32:16"]
+
+
+def test_trip_trim_applies_to_every_camera_of_the_trip(env):
+    clips = two_trips() + two_trips(camera="Rear", offset=2)
+    # The GUI snaps to the latest camera's start and the earliest camera's end.
+    plan = plan_for(clips, env, trip_ranges={2: _trim(62 + 2 / 60, 67)})
+    assert [(p.camera, p.trip_index, len(p.clips)) for p in plan.parts] == [
+        ("Front", 1, 3), ("Front", 2, 5), ("Rear", 1, 3), ("Rear", 2, 5),
+    ]
+
+
+def test_trip_trim_keeps_selection_keys(env):
+    from dashcam_merger.core.planner import part_key
+
+    scan = plan_for(two_trips(), env)
+    keys = {part_key(p) for p in scan.parts}
+    plan = plan_for(two_trips(), env, trip_ranges={2: _trim(62, 67)}, selected_parts=keys)
+    assert len(plan.parts) == 2 and plan.not_selected == []
+    assert {part_key(p) for p in plan.parts} == keys
+
+
+def test_trip_trim_combines_with_time_range(env):
+    plan = plan_for(two_trips(), env, trip_ranges={2: _trim(62, 67)},
+                    time_from=_point("16:30"))
+    assert [c.sequence for p in plan.parts for c in p.clips] == [7, 8, 9]  # 16:29:16 on
+
+
+def test_trip_trim_with_no_clips_left_warns(env):
+    window = (START + timedelta(hours=5), START + timedelta(hours=6))
+    plan = plan_for(two_trips(), env, trip_ranges={2: window})
+    assert [p.trip_index for p in plan.parts] == [1]
+    assert any("Front trip 2: no clips in the trimmed time" in w for w in plan.warnings)
+
+
+def test_trip_trim_for_missing_trip_is_ignored(env):
+    plan = plan_for(two_trips(), env, trip_ranges={7: _trim(62, 67)})
+    assert [len(p.clips) for p in plan.parts] == [3, 10] and plan.trip_trims == []

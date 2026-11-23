@@ -20,21 +20,25 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -47,8 +51,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -64,6 +70,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.state.ToggleableState
@@ -72,12 +80,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.phong.dashcammerger.BuildConfig
 import com.phong.dashcammerger.core.CAMERA_ORDER
 import com.phong.dashcammerger.core.Camera
+import com.phong.dashcammerger.core.OutputPart
 import com.phong.dashcammerger.core.PartRunState
 import com.phong.dashcammerger.core.PlanOptions
 import com.phong.dashcammerger.core.Progress
+import com.phong.dashcammerger.core.TimeRange
+import com.phong.dashcammerger.core.TimeRangeError
+import com.phong.dashcammerger.core.TrimModel
+import java.time.LocalDateTime
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.mutableLongStateOf
 import kotlinx.coroutines.delay
@@ -133,6 +147,10 @@ private fun MergerScreen() {
     }
     var splitFat32 by remember { mutableStateOf(prefs.getBoolean(KEY_SPLIT_FAT32, false)) }
     var linkPairs by remember { mutableStateOf(prefs.getBoolean(KEY_LINK_PAIRS, false)) }
+    // FR-3.7: "Only merge from ... to ..." boxes, applied by Scan; not remembered between runs.
+    var timeFromText by rememberSaveable { mutableStateOf("") }
+    var timeToText by rememberSaveable { mutableStateOf("") }
+    var rangeError by remember { mutableStateOf("") }
     val session = MergeSession
     remember { session.arrange(prefs.getBoolean(KEY_ORDER_BY_TIME, true)) }
 
@@ -305,6 +323,51 @@ private fun MergerScreen() {
                                     Spacer(Modifier.width(6.dp))
                                     Text("min", style = MaterialTheme.typography.bodySmall)
                                 }
+                                // FR-3.7a: to the minute, either end may be empty.
+                                Text("Only merge from … to … (empty = everything)", style = MaterialTheme.typography.labelMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedTextField(
+                                        value = timeFromText,
+                                        onValueChange = { timeFromText = it.take(20); rangeError = "" },
+                                        enabled = !session.busy,
+                                        singleLine = true,
+                                        placeholder = { Text("14:05", style = MaterialTheme.typography.bodySmall) },
+                                        label = { Text("From") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                                        textStyle = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    OutlinedTextField(
+                                        value = timeToText,
+                                        onValueChange = { timeToText = it.take(20); rangeError = "" },
+                                        enabled = !session.busy,
+                                        singleLine = true,
+                                        placeholder = { Text("14:30", style = MaterialTheme.typography.bodySmall) },
+                                        label = { Text("To") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                                        textStyle = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        rangeError.ifEmpty {
+                                            "HH:MM, or YYYY-MM-DD HH:MM when the card covers several days. " +
+                                                "Whole clips touching the range are merged."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (rangeError.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant
+                                        else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (timeFromText.isNotEmpty() || timeToText.isNotEmpty()) {
+                                        Spacer(Modifier.width(8.dp))
+                                        OutlinedButton(
+                                            onClick = { timeFromText = ""; timeToText = ""; rangeError = "" },
+                                            enabled = !session.busy,
+                                        ) { Text("Clear") }
+                                    }
+                                }
                                 OptionRow("Split at 3.9 GB (FAT32 SD card / USB stick)", splitFat32, !session.busy) {
                                     splitFat32 = it
                                     prefs.edit().putBoolean(KEY_SPLIT_FAT32, it).apply()
@@ -334,6 +397,13 @@ private fun MergerScreen() {
                     Text("No plan yet - tap Scan & plan to list the files to export.", style = MaterialTheme.typography.bodyMedium)
                 } else {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        if (session.timeRange.isNotEmpty()) {
+                            Text(
+                                "Time range: ${session.timeRange} (whole clips)",
+                                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                        }
                         PartSelector(
                             enabled = session.phase == Phase.Planned,
                             linkPairs = linkPairs,
@@ -401,20 +471,40 @@ private fun MergerScreen() {
             Button(
                 onClick = {
                     if (t != null) {
-                        session.scan(
+                        // FR-3.7a: a box that does not hold a time stops here, before any reading.
+                        val range = try {
+                            TimeRange.parseOptional(timeFromText) to TimeRange.parseOptional(timeToText)
+                        } catch (e: TimeRangeError) {
+                            rangeError = e.message ?: "not a time"
+                            tab = TAB_SETUP
+                            null
+                        }
+                        if (range != null) session.scan(
                             ctx, t, effectiveOut,
                             PlanOptions(
                                 splitOnGap = splitOnGap,
                                 gapSplitSeconds = 60 * (tripGapText.toIntOrNull()?.takeIf { it > 0 } ?: DEFAULT_TRIP_GAP_MIN),
                                 maxPartGb = if (splitFat32) FAT32_PART_GB else 0.0,
+                                timeFrom = range.first,
+                                timeTo = range.second,
                             ),
+                            rangeTexts = timeFromText.trim() to timeToText.trim(),
                         )
                     }
                 },
                 enabled = t != null && !session.busy,
             ) { Text("Scan & plan") }
+            // FR-3.7f: what is merged is always what the list shows.
+            val rangeChanged = session.scannedRange != (timeFromText.trim() to timeToText.trim())
             when (session.phase) {
-                Phase.Planned ->
+                Phase.Planned -> if (rangeChanged) {
+                    Text(
+                        "Time range changed - tap Scan & plan again",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                } else
                     Button(
                         onClick = {
                             // AR-13.2: ask once per run of the app; merge whatever the answer.
@@ -501,6 +591,27 @@ private fun PartSelector(enabled: Boolean, linkPairs: Boolean, onLinkPairs: (Boo
     val parts = session.planParts
     val order = session.order
     val chosen = session.selectedParts
+    val ctx = LocalContext.current
+    // FR-3.8a: each row has a small "Trip time" button that opens the trim sliders of its trip.
+    var trimTrip by remember { mutableStateOf<Int?>(null) }
+    trimTrip?.let { trip ->
+        val tripParts = session.tripParts(trip)
+        if (tripParts.none { p -> p.clips.any { it.timestamp != null } }) {
+            trimTrip = null
+        } else {
+            val title = Report.partLabel(tripParts.first()).substringBefore(" part").ifEmpty { "trip $trip" }
+            TrimDialog(
+                title = title,
+                parts = tripParts,
+                current = session.tripTrims[trip],
+                onDismiss = { trimTrip = null },
+                onOk = {
+                    trimTrip = null
+                    session.setTripTrim(ctx, trip, it)
+                },
+            )
+        }
+    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Files to export", style = MaterialTheme.typography.labelMedium)
@@ -547,11 +658,29 @@ private fun PartSelector(enabled: Boolean, linkPairs: Boolean, onLinkPairs: (Boo
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Checkbox(checked = i in session.selected, enabled = enabled, onCheckedChange = { session.toggle(i, linkPairs) })
                     Column(Modifier.weight(1f)) {
-                        val label = Report.partLabel(part)
-                        Text(
-                            if (label.isEmpty()) part.camera.name else "${part.camera.name} $label",
-                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                        )
+                        val label = (Report.partLabel(part) +
+                            if (part.tripIndex in session.tripTrims) " ✂" else "").trim() // FR-3.8d
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (label.isEmpty()) part.camera.name else "${part.camera.name} $label",
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (part.clips.first().timestamp != null) {
+                                Spacer(Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = { trimTrip = part.tripIndex },
+                                    enabled = enabled,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                ) {
+                                    Text(
+                                        if (part.tripIndex in session.tripTrims) "✂ Trimmed" else "✂ Trip time",
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                        }
                         Report.partSpan(part).takeIf { it.isNotEmpty() }?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall)
                         }
@@ -566,6 +695,130 @@ private fun PartSelector(enabled: Boolean, linkPairs: Boolean, onLinkPairs: (Boo
                     IconButton(onClick = { session.move(pos, 1) }, enabled = enabled && pos < order.size - 1) { Text("▼") }
                 }
             }
+        }
+    }
+}
+
+private val TRIM_LABEL_WIDTH = 44.dp
+/** Material3 Slider insets its track by about the thumb radius; the timeline matches it. */
+private val SLIDER_INSET = 10.dp
+
+/**
+ * FR-3.8b/c: trim one trip - a timeline per camera and Start / End sliders that snap to clip
+ * boundaries (whole clips, lossless). OK returns the bounds, or null for the whole trip.
+ */
+@Composable
+private fun TrimDialog(
+    title: String,
+    parts: List<OutputPart>,
+    current: Pair<LocalDateTime, LocalDateTime>?,
+    onDismiss: () -> Unit,
+    onOk: (Pair<LocalDateTime, LocalDateTime>?) -> Unit,
+) {
+    val model = remember(parts, current) { TrimModel(parts, current) }
+    var version by remember { mutableIntStateOf(0) } // TrimModel is plain Kotlin: bump to redraw
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.95f),
+        title = { Text("Trim $title") },
+        text = {
+            check(version >= 0) // read the counter so the content recomposes
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(model.heading(title), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Move Start and End to cut off a long stop at the beginning or end of the trip. " +
+                        "Whole clips only, so the merge stays lossless.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TrimTimeline(model, version)
+                TrimSlider("Start", model.start, model.total, model.startText,
+                    onChange = { model.setStart(it); version++ }, onStep = { model.step(true, it); version++ })
+                TrimSlider("End", model.end, model.total, model.endText,
+                    onChange = { model.setEnd(it); version++ }, onStep = { model.step(false, it); version++ })
+                Text(model.summary, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onOk(model.result()) }) { Text("OK") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { model.whole(); version++ }) { Text("Whole trip") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+}
+
+/** One bar per camera, kept clips highlighted, minute ticks from the trip start. */
+@Composable
+private fun TrimTimeline(model: TrimModel, version: Int) {
+    val keptColor = MaterialTheme.colorScheme.primary
+    val cutColor = MaterialTheme.colorScheme.outlineVariant
+    val markColor = MaterialTheme.colorScheme.error
+    val tickColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        for (camera in model.cameras) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(camera.name, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(TRIM_LABEL_WIDTH))
+                Canvas(Modifier.weight(1f).padding(horizontal = SLIDER_INSET).height(14.dp)) {
+                    check(version >= 0)
+                    fun x(offset: Double) = (offset / model.total * size.width).toFloat()
+                    for (clip in model.parts.filter { it.camera == camera }.flatMap { it.clips }) {
+                        val ts = clip.timestamp ?: continue
+                        val x0 = x(model.offset(ts))
+                        val x1 = x(model.offset(ts.plusNanos((clip.probe?.durationUs ?: 0L) * 1000)))
+                        drawRect(
+                            if (model.isKept(clip)) keptColor else cutColor,
+                            topLeft = Offset(x0, 0f),
+                            size = Size(maxOf(1f, x1 - x0 - 1f), size.height),
+                        )
+                    }
+                    for (offset in listOf(model.start, model.end)) {
+                        drawLine(markColor, Offset(x(offset), 0f), Offset(x(offset), size.height), strokeWidth = 2.dp.toPx())
+                    }
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(TRIM_LABEL_WIDTH))
+            Canvas(Modifier.weight(1f).padding(horizontal = SLIDER_INSET).height(5.dp)) {
+                // About eight ticks whatever the length, as on the PC.
+                val minutes = model.total / 60
+                val step = listOf(1, 2, 5, 10, 15, 30, 60, 120).firstOrNull { minutes / it <= 8 } ?: 240
+                var tick = 0.0
+                while (tick <= minutes + 1e-9) {
+                    val x = (tick * 60 / model.total * size.width).toFloat()
+                    drawLine(tickColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+                    tick += step
+                }
+            }
+        }
+        Row {
+            Spacer(Modifier.width(TRIM_LABEL_WIDTH))
+            Text("0", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f).padding(start = SLIDER_INSET))
+            Text("${TrimModel.offsetText(model.total)} min", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** A slider lined up with the timeline, its position as date + time and minutes, and < / > one clip. */
+@Composable
+private fun TrimSlider(name: String, value: Double, total: Double, text: String, onChange: (Double) -> Unit, onStep: (Int) -> Unit) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.width(TRIM_LABEL_WIDTH))
+            Slider(
+                value = value.toFloat(),
+                onValueChange = { onChange(it.toDouble()) },
+                valueRange = 0f..total.toFloat(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(TRIM_LABEL_WIDTH))
+            Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            IconButton(onClick = { onStep(-1) }) { Text("<") }
+            IconButton(onClick = { onStep(1) }) { Text(">") }
         }
     }
 }

@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Document version | 1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use `yyyyMMdd_HHmmss`, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after > 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13; 1.7 — 2026-11-02: progress tracking — speed, time left, finish time, per-part list, timing in the report, AR-14) |
-| App version | `1.7-android` (versionCode 9; shown next to the title, from `BuildConfig`), package `com.phong.dashcammerger` |
+| Document version | 1.4 — 2026-10-03 (1.1: choose which files to export, AR-10.5–AR-10.13; 1.2: export order and Front/Rear pairing, AR-10.14–AR-10.17; 1.3: tabbed layout, AR-12; 1.4: output names use `yyyyMMdd_HHmmss`, AR-6.3; 1.5 — 2026-10-17: synced with the PC app — clip length 1/3/5 min, AR-4.3; trips on by default after > 15 min, configurable, AR-6.1/6.3/6.5; 1.6 — 2026-11-02: version shown next to the title; merge keeps running with the screen off / app in the background, AR-13; 1.7 — 2026-11-02: progress tracking — speed, time left, finish time, per-part list, timing in the report, AR-14; 1.8 — 2026-11-23: merge only a time range, AR-6.6, synced with PC FR-3.7; 1.9 — 2026-11-23: trip trim, AR-6.7, synced with PC FR-3.8) |
+| App version | `1.9-android` (versionCode 12; shown next to the title, from `BuildConfig`), package `com.phong.dashcammerger` |
 | Status | Built, installed and verified on a Samsung Galaxy Note 10 (SM-N970F, Android 12) |
 | Source location | `DashCamMerger/android/` in the DashCam Merger repository (commit `51ae98e`, later updates follow) |
 | Parent documents | `../pc/docs/DashCamMerger-Specification.md` (desktop FR-1…FR-12), `../pc/docs/DashCamMerger-Design.md` |
@@ -288,6 +288,65 @@ Regular expressions (Java syntax, compiled with `Pattern.CASE_INSENSITIVE`, appl
 - **AR-6.4** Collisions (FR-6.2): if the name exists in the output folder, or was already
   given to another part in this plan, try `<stem>_2.mp4`, `<stem>_3.mp4`, … until free.
   Existing files are never overwritten.
+- **AR-6.6 Time range (v1.8, PC FR-3.7).** Setup has two boxes *Only merge from* [From]
+  [To] (empty = open end), read when **Scan & plan** is tapped and not remembered between
+  runs. Each is `HH:MM` or `YYYY-MM-DD HH:MM` (`14h05`, `14.05`, seconds and `/` or `.` in
+  the date are accepted; `core/TimeRange.kt`, a port of `timerange.py`).
+  - A box that does not parse stops the scan before anything is read and shows
+    `not a time: '<text>' (use HH:MM or YYYY-MM-DD HH:MM, …)` in red under the boxes.
+  - Resolving (`TimeRange.resolve`, before probing): a time without a date takes the other
+    end's date, else the footage's only day; footage over several days without a date, or
+    no timestamps at all, is an error (state *Error*, status `Time range: <message>`). A
+    time-only *To* at or before *From* means the next day; two dated ends out of order are
+    an error.
+  - Lossless: every **whole clip** with any part inside [From, To) is kept
+    (`start < To` and `start + probed duration > From`), so a file may start / end up to
+    one clip length outside the range. Clips outside it are never opened for merging.
+  - Trip numbers, `tripCount` and output names stay those of the **whole card**
+    (e.g. `…_trip2.mp4`, label `trip 2/10`); a range across a trip gap gives one file per
+    trip. Gap warnings are only given between two kept clips. A camera with no clip in
+    the range, or without filename timestamps, is left out with a warning; nothing left at
+    all → status `Nothing to merge in the time range`.
+  - The Files tab shows `Time range: <range> (whole clips)` above the list, and the plan
+    text and `merge_report.txt` carry the same line (after `Unreadable:` / before
+    `Not selected` respectively). `<range>` is `2026-11-21 14:20 to 14:26`,
+    `from …` or `until …`; the end keeps its date only on another day.
+  - If the boxes are edited after a scan, the Merge button is replaced by the red text
+    *Time range changed - tap Scan & plan again* (PC FR-3.7f).
+- **AR-6.7 Trip trim (v1.9, PC FR-3.8).** Cuts the beginning and/or end off one trip (e.g.
+  a long stop while parked with the camera running) without touching the other trips.
+  - On the Files tab every row whose clips have filename timestamps has a small
+    **✂ Trip time** button next to its label (**✂ Trimmed** once that trip is trimmed);
+    it opens the trim dialog for that row's trip, all cameras, so the Front and the Rear
+    row of a trip open the same dialog (the PC has the same button as its Trim column,
+    FR-3.8a).
+  - The dialog (`TrimDialog` in `MainActivity`, logic in `core/TripTrim.kt` `TrimModel`, a
+    port of the PC `TrimDialog`) shows `Trip 2/10 (Front, Rear): <start> to <end> - 44:54
+    min`, one timeline bar per camera (kept clips in the primary colour, cut clips grey,
+    red Start/End marks, minute ticks: about eight whatever the length) and a **Start** and
+    an **End** slider lined up with the bars. Under each slider: date and time and minutes
+    from the trip start (`2026-11-21 14:39:29   +25:24 min of 44:54`), and `<` / `>` to
+    move by one clip. Summary: `Keeps 25:23 min, cuts 19:32 min (Front 9/11 files, Rear
+    9/11 files)`. Buttons *Whole trip*, *Cancel*, *OK*.
+  - Lossless, as AR-6.6: the sliders snap to clip boundaries and whole clips are merged.
+    Boundaries of different cameras ≤ 5 s apart are one snap point (starts: the latest,
+    ends: the earliest), so every camera is cut at the same clip. Start stays before End.
+  - OK stores (first kept clip start, last kept clip end) per trip in
+    `MergeSession.tripTrims` (OK on the whole trip removes the trim) and re-plans at once
+    from the already probed clips (`PlanOptions.tripRanges`, windows from
+    `TimeRange.clipWindow`, which pulls each end in by 1 s so touching neighbours are not
+    caught). Unlike the PC, which applies trims at Merge, the Android plan *is* what
+    Merge writes, so the re-plan happens here; status `Trimmed trips: 2`.
+  - The trip's rows then show the trimmed clips, length, size, start/end and output name,
+    and a ✂ after the label. Ticks and the list order are kept (matched by
+    `OutputPart.key` = camera + first clip of the untrimmed part, `Arrange.carryOver`).
+    Trip numbers stay those of the whole card. The dialog always shows the scanned
+    (untrimmed) trip, so a trim can be widened again. A new Scan clears all trims.
+  - Combines with the AR-6.6 time range (a clip must satisfy both). A camera with no
+    clip left in a trimmed trip gets the warning `Front trip 2: no clips in the trimmed
+    time`; footage without filename timestamps cannot be trimmed (no ✂ button).
+  - The plan text and `merge_report.txt` show one line per trimmed trip after the time
+    range line: `Trimmed trip 2: 2026-11-21 14:14:06 to 14:39:30 (whole clips)`.
 - **AR-6.5** Each part is first written as `<final stem>.partial.mp4`.
 
 ### 3.7 Merging (lossless stream copy)
@@ -471,6 +530,7 @@ Free space there: 128.28 GB
 | `Split into trips (one file per trip)` | **on** | AR-6.1 rule 2 |
 | `New trip after a break of more than [N] min` (number field, enabled while the switch is on) | 15 | trip gap of AR-6.1 rule 2; empty / 0 → 15 |
 | `Split at 3.9 GB (FAT32 SD card / USB stick)` | off | AR-6.1 rule 3, 3.9 GiB limit (FAT32 cannot hold files ≥ 4 GiB) |
+| `Only merge from` [From] [To] (text boxes, *Clear* button when filled) | empty | AR-6.6; **not** persisted |
 
 Fixed values: output subfolder `merged`, gap warning 300 s, match threshold 90 %. No
 default clip length (AR-4.3).
@@ -614,6 +674,9 @@ DashCamMerger/android/
       Ordering.kt  timestamp/sequence parsing, sort, gaps
       Planner.kt   probe orchestration, split, naming, uniqueName
       Report.kt    plan summary, report text, formatters
+      TimeRange.kt time range parse / resolve / overlap, trim window (AR-6.6, AR-6.7)
+      TripTrim.kt  TrimModel: trim dialog snap points, sliders, texts (AR-6.7)
+      Arrange.kt   export order, Front/Rear pairs, carry-over after a trim
       Progress.kt  ProgressTracker, ProgressSnapshot, PartRunState, progress texts (AR-14)
     android/
       SafStorage.kt   SafScanner (scan, describe, stat) + OutputFolder (write guard)
@@ -624,6 +687,8 @@ DashCamMerger/android/
       MainActivity.kt Compose UI
   app/src/test/java/com/phong/dashcammerger/core/CoreTest.kt
   app/src/test/java/com/phong/dashcammerger/core/ProgressTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/TimeRangeTest.kt
+  app/src/test/java/com/phong/dashcammerger/core/TripTrimTest.kt
 ```
 
 ### 5.2 Data model (`core/Models.kt`)
@@ -637,9 +702,9 @@ DashCamMerger/android/
 | `enum OrderSource` | Timestamp, Sequence, Mtime |
 | `Gap` | `before`, `after`, `seconds: Double` |
 | `CameraGroup` | `camera`, `clips: MutableList`, `orderSource`, `gaps` |
-| `OutputPart` | `camera`, `partIndex`, `partCount`, `clips`, `splitReason`, `expectedDurationUs`, `expectedSize`, mutable `outputName`; derived `partialName` |
-| `PlanOptions` (data) | `outputSubfolder="merged"`, `gapWarningSeconds=300`, `gapSplitSeconds=1800`, `splitOnGap=false`, `maxPartGb=0.0` |
-| `MergePlan` | `groups`, `parts`, `unclassified`, `unreadable`, `warnings` |
+| `OutputPart` | `camera`, `partIndex`, `partCount`, `clips`, `splitReason`, `expectedDurationUs`, `expectedSize`, `tripIndex`, `tripCount`, `tripPart`, `tripParts`, `key` (selection id from the untrimmed part, AR-6.7), mutable `outputName`; derived `partialName` |
+| `PlanOptions` (data) | `outputSubfolder="merged"`, `gapWarningSeconds=300`, `gapSplitSeconds=900`, `splitOnGap=true`, `maxPartGb=0.0`, `timeFrom` / `timeTo: TimePoint?` (AR-6.6), `tripRanges: Map<Int, Pair<LocalDateTime, LocalDateTime>>` (AR-6.7) |
+| `MergePlan` | `groups`, `parts`, `unclassified`, `unreadable`, `warnings`, `timeRange: String` (AR-6.6), `tripTrims: List<String>` (AR-6.7) |
 | `enum PartStatus` | PASS, FAIL, CANCELLED |
 | `PartResult` | `part`, `status`, `finalName?`, `actualDurationUs`, `actualSize`, `reason`, `elapsedMs` |
 | `RunReport` | `plan`, `results`, `outputFolder`, `sourcesUntouched`, `sourceProblems`, `skipped: List<OutputPart> = []` (unticked parts, AR-10.12) |
@@ -797,6 +862,13 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | `codecChangeInsideATripNumbersPartsPerTrip` | `_trip1`, `_trip2_part1`, `_trip2_part2`; labels `trip 2/2 part 1/2` |
 | `planSummaryListsTripsWithTimes` | `Front trip 1/2: 2026-08-31 15:25:00 - 15:27:00, 2 clips, 0:02:00` + output name line |
 
+`TimeRangeTest` (AR-6.6, 9 tests) and `TripTrimTest` (AR-6.7, 12 tests), all passing:
+ports of the PC `test_timerange.py` and the time-range / trim cases of `test_planner.py`
+and `test_gui.py` — parsing and resolving, whole-clip overlap, the trim window excluding
+touching neighbours, a trim kept to its trip and applied to every camera, selection keys,
+order and ticks carried over, trim + time range, `TrimModel` snapping (6:02 / 21:00 on a
+Front + Rear trip 2 s apart), slider texts, `<` / `>` and *Whole trip*.
+
 `ProgressTest` (AR-14, all passing): speed unknown for the first 5 s / 1 MiB then averaged; speed over the last 30 s only (20 → 5 MiB/s); percent, time left, finish clock and the full progress line; stall ≥ 15 s hides time left; *estimating time left…*; finished parts count fully and percent stays ≤ 99; detail line and notification text; duration / remaining / speed texts; finish time on the next day; report timing line.
 
 ### 9.2 Device acceptance tests (Note 10, 2026-09-27)
@@ -818,6 +890,9 @@ rectangle `M28,40h52v28h-52z`, three navy "frames" `M32,46h12v16h-12z`,
 | DT-10 | v1.6 build 7: 4 Vietmap clips (USB reader `Vietmap_M1/Test`, 1.27 GB) → `DashTest`; Merge, then power button | Merge finishes with the screen off | 2026-11-02: **Fail** — progress notification and wake lock OK, but Samsung Freecess froze the app 2 min after screen-off (1.13 / 1.24 GB); resumed and PASSed when the screen came on. Led to AR-13.2 |
 | DT-11 | v1.6 build 8, same clips; Merge → *Stop optimizing battery usage?* → Allow, then power button | Whole merge with the screen off, no freeze | 2026-11-02: **Pass** — file grew ~9 MB/s, screen *Dozing* throughout, no Freecess freeze, `.partial` renamed after verification, report PASS / sources untouched, *Done - all 1 part(s) verified* notification. All 31 284 samples identical to the DT-10 output (only header times and final-chunk interleave differ) |
 | DT-12 | v1.7 build 9: merge several files (e.g. a whole trip folder) and watch the bottom bar, the Details tab and the notification; once turn the screen off, once unplug nothing | Percent, size, speed, time left and finish clock appear after ~5 s and stay plausible; *this file* % and *clip j/n* advance; *finishing* shown at each part end; Details lists ✓/▶/○ per part; notification title shows % and time left; final status and report end with the elapsed time | **Pending** (planned 2026-11-03) |
+
+| DT-13 | v1.8 build 10, Galaxy Z Flip 4, Vietmap M1 card over USB (20 files, 10 trips over 2026-11-21/22): From `14:20814:26`; then `14:20`–`14:26`; then `2026-11-21 14:20`–`14:26`; Merge to `Phone:/Movies` | Bad text rejected with the hint; time-only on a 2-day card → status `Time range: … give the date too`; dated range → Front/Rear trip 2/10, 3 clips each | 2026-11-23: **Pass** — both outputs PASS 0:09:00 (972 MB / 668 MB), report has `Time range: 2026-11-21 14:20 to 14:26 (whole clips)`. A merge to the (full) card itself failed with `writeSampleData returned an error` |
+| DT-14 | v1.9 build 11, same phone and card: Scan; ✂ on Front trip 2/10 (build 12: *✂ Trip time* button); End `<` twice; OK; tick only trip 2 Front + Rear; Merge to `Phone:/Movies` | Dialog: 44:54 min trip, End at `14:39:29 +25:24 min`, `Front 9/11 files, Rear 9/11 files`; rows show ✂, 9 clips, 0:25:24; ticks and order kept | 2026-11-23: **Pass** — both outputs PASS (9 files, 0:25:24 / 0:25:23, 2.55 / 1.75 GB), report has `Trimmed trip 2: 2026-11-21 14:14:06 to 14:39:30 (whole clips)`, sources untouched, 5 min 31 s at 13.3 MB/s |
 
 Note: the synthetic test clips are colour bars (red/green/yellow/blue/magenta/cyan) by
 design; colourful output from those clips is not a defect.

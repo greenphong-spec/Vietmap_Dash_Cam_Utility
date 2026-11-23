@@ -1,4 +1,4 @@
-DashCam Merger 1.1.0
+DashCam Merger 1.2.0
 ====================
 
 What it does
@@ -36,6 +36,12 @@ Only want part of a drive? Type a start and/or end time in the "Only merge
 from ... to ..." boxes (for example 14:05 and 14:30, or 2026-11-02 14:05 when
 the card holds several days) and click "Scan" again. Clips are never cut, so
 the file may begin or end up to one clip (1-5 minutes) outside the times.
+
+Parked with the camera running at the start or end of a trip? Click "✂ Trip
+time" in that trip's row of the table. Drag the Start
+and End sliders (or step one clip with < and >); each shows the clock time and
+the minutes from the start of the trip. Click OK, then Merge. Only that trip
+is trimmed, for every camera; a new Scan clears the trims.
 
 Every finished file is checked before you are told it worked: its length must
 match the total length of the clips that went into it. A file that fails the

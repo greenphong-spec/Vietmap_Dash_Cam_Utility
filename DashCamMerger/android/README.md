@@ -52,6 +52,10 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    merged result off the SD card. Leave unset to write to `<input>/merged`.
    **Split into trips** (on by default) writes one file per trip; a break of more than
    **15 min** (change it in the box next to it) starts a new trip.
+   **Only merge from … to …** (optional) keeps just the footage between two times, e.g.
+   `14:20` to `14:26`, or `2026-11-21 14:20` when the card holds several days. Whole
+   clips that touch the range are merged (no re-encoding), so a file can start/end up to
+   one clip length outside it; trip numbers stay those of the whole card.
 3. **Scan & plan** — shows each camera, clip count, codec, the files that will be
    written, and any warnings. If the file naming isn't recognised you assign each group
    to Front/Rear/Interior/Skip.
@@ -63,6 +67,11 @@ Merge buttons and the progress bar stay at the bottom on every tab.
    Front and Rear file side by side), ▲ / ▼ move a file, and files are merged in the order shown.
    **Keep Front/Rear pairs together** makes ticking a file also tick the other camera's
    file from the same time.
+   **✂ Trip time** (v1.9, small button on each file) opens that file's trip with
+   a timeline per camera and **Start** / **End** sliders (`<` / `>` move one clip) to cut
+   a long stop off the beginning or end, e.g. parked with the camera running. The sliders
+   snap to whole clips (lossless) and cut every camera of the trip at the same clip; the
+   rows then show the trimmed length and *✂ Trimmed*. A new Scan clears the trims.
 4. **Merge** (enabled when at least one file is ticked) — the screen stays on while the app
    is open. **Cancel** keeps the partial file as `INCOMPLETE_DO_NOT_USE_*`.
 

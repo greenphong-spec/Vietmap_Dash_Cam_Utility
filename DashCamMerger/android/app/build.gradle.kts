@@ -16,8 +16,8 @@ android {
         minSdk = 28
         targetSdk = 36
         // Bump both on every build handed to a phone; the app shows them next to its title.
-        versionCode = 9
-        versionName = "1.7-android"
+        versionCode = 12
+        versionName = "1.9-android"
     }
 
     buildTypes {

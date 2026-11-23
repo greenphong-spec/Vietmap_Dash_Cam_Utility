@@ -55,6 +55,12 @@ object Report {
             ""
         }
 
+    /** "Time range: 2026-11-02 14:05 to 14:30 (whole clips)" (FR-3.7e). */
+    fun timeRangeLine(plan: MergePlan): String = "Time range: ${plan.timeRange} (whole clips)"
+
+    /** "Trimmed trip 2: 2026-11-02 14:15:00 to 15:02:10 (whole clips)" (FR-3.8e). */
+    fun trimLines(plan: MergePlan): List<String> = plan.tripTrims.map { "Trimmed $it (whole clips)" }
+
     /** Confirmation text shown before anything is written (FR-2.4). */
     fun planSummary(plan: MergePlan, outputFolder: String): String = buildString {
         for (group in plan.groups) {
@@ -63,6 +69,8 @@ object Report {
         }
         appendLine("Unclassified: ${plan.unclassified.size}")
         appendLine("Unreadable: ${plan.unreadable.size}")
+        if (plan.timeRange.isNotEmpty()) appendLine(timeRangeLine(plan))
+        trimLines(plan).forEach { appendLine(it) }
         appendLine("Parts to write: ${plan.parts.size}")
         for (part in plan.parts) {
             val label = partLabel(part).let { if (it.isEmpty()) "" else " $it" }
@@ -88,6 +96,8 @@ object Report {
                     "${formatSize(r.actualSize)}  ->  ${r.status}" + if (r.reason.isNotEmpty()) " (${r.reason})" else ""
             )
         }
+        if (plan.timeRange.isNotEmpty()) appendLine(timeRangeLine(plan))
+        trimLines(plan).forEach { appendLine(it) }
         if (report.skipped.isNotEmpty()) {
             appendLine("Not selected (skipped by user): ${report.skipped.size}")
             report.skipped.forEach { appendLine("    ${it.outputName}") }

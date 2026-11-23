@@ -50,6 +50,23 @@ object Arrange {
         return sa < eb && sb < ea
     }
 
+    /**
+     * After a re-plan (FR-3.8 trim) keep the list's order and ticks: parts are matched by
+     * Planner.partKey, which a trim does not change. Returns (order, selected) for [new].
+     */
+    fun carryOver(
+        old: List<OutputPart>,
+        oldOrder: List<Int>,
+        oldSelected: Set<Int>,
+        new: List<OutputPart>,
+    ): Pair<List<Int>, Set<Int>> {
+        val position = HashMap<String, Int>()
+        oldOrder.forEachIndexed { pos, i -> position.putIfAbsent(Planner.partKey(old[i]), pos) }
+        val ticked = oldSelected.map { Planner.partKey(old[it]) }.toSet()
+        val order = new.indices.sortedWith(compareBy({ position[Planner.partKey(new[it])] ?: Int.MAX_VALUE }, { it }))
+        return order to new.indices.filter { Planner.partKey(new[it]) in ticked }.toSet()
+    }
+
     /** Move order[pos] one place up (-1) or down (+1); out-of-range moves are ignored. */
     fun move(order: List<Int>, pos: Int, delta: Int): List<Int> {
         val to = pos + delta

@@ -109,3 +109,46 @@ def test_describe():
     assert describe(a, None) == "from 2026-11-02 14:05"
     assert describe(None, b) == "until 2026-11-02 14:30"
     assert describe(None, None) == ""
+
+
+# ---- trip trim window (FR-3.8)
+def _clip_at(start: datetime, seconds: float) -> ClipInfo:
+    from dashcam_merger.core.models import StreamSignature
+
+    clip = ClipInfo(path=Path("C:/x.MP4"), size_bytes=1, mtime=0.0)
+    clip.timestamp = start
+    sig = StreamSignature("h264", 1, 1, "30/1", "yuv420p", "none", 0, 0)
+    clip.probe = ProbeResult(seconds, 1, sig)
+    return clip
+
+
+def test_clip_window_excludes_touching_neighbours():
+    from datetime import timedelta
+
+    from dashcam_merger.core.timerange import clip_window
+
+    t = datetime(2026, 11, 2, 14, 0, 0)
+    # three 60.03 s clips: their ends overlap the next start by a few frames
+    clips = [_clip_at(t + timedelta(minutes=i), 60.03) for i in range(3)]
+    window = clip_window(t + timedelta(minutes=1), t + timedelta(minutes=1, seconds=60.03))
+    assert [overlaps(c, *window) for c in clips] == [False, True, False]
+
+
+def test_clip_window_of_a_tiny_clip_still_keeps_it():
+    from datetime import timedelta
+
+    from dashcam_merger.core.timerange import clip_window
+
+    t = datetime(2026, 11, 2, 14, 0, 0)
+    clip = _clip_at(t, 1.0)
+    assert overlaps(clip, *clip_window(t, t + timedelta(seconds=1)))
+
+
+def test_describe_trim():
+    from dashcam_merger.core.timerange import describe_trim
+
+    begin = datetime(2026, 11, 2, 14, 15, 0)
+    assert describe_trim(2, begin, datetime(2026, 11, 2, 15, 2, 10)) == (
+        "trip 2: 2026-11-02 14:15:00 to 15:02:10"
+    )
+    assert describe_trim(3, begin, datetime(2026, 11, 3, 0, 5, 0)).endswith("to 2026-11-03 00:05:00")

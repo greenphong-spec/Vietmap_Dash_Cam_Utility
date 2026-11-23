@@ -68,6 +68,8 @@ class OutputPart(
     val tripCount: Int = 1,
     val tripPart: Int = 1,
     val tripParts: Int = 1,
+    /** FR-3.6 selection id from the untrimmed part (camera + first clip), so a trim keeps it. */
+    val key: String = "",
 ) {
     /** Final file name inside the merged/ folder, e.g. Front_20260101120000_to_20260101130000.mp4 */
     var outputName: String = ""
@@ -81,6 +83,11 @@ data class PlanOptions(
     val gapSplitSeconds: Int = 900,
     val splitOnGap: Boolean = true,
     val maxPartGb: Double = 0.0,
+    /** FR-3.7 time range; null = open end. Whole clips that overlap it are merged. */
+    val timeFrom: TimePoint? = null,
+    val timeTo: TimePoint? = null,
+    /** FR-3.8 trip trim: trip number -> window from TimeRange.clipWindow, for every camera. */
+    val tripRanges: Map<Int, Pair<LocalDateTime, LocalDateTime>> = emptyMap(),
 )
 
 class MergePlan(
@@ -89,6 +96,10 @@ class MergePlan(
     val unclassified: List<ClipInfo>,
     val unreadable: List<ClipInfo>,
     val warnings: List<String>,
+    /** FR-3.7, e.g. "2026-11-02 14:05 to 14:30"; "" = everything. */
+    val timeRange: String = "",
+    /** FR-3.8, one per trimmed trip, e.g. "trip 2: 2026-11-02 14:15:00 to 15:02:10". */
+    val tripTrims: List<String> = emptyList(),
 )
 
 enum class PartStatus { PASS, FAIL, CANCELLED }

@@ -1,7 +1,7 @@
 # DashCam Merger – Software Specification
 
 **Version:** 1.0 draft
-**Date:** 2026-09-14 (rev. 2026-10-17: clip length 1 / 3 / 5 min, FR-3.4 break rule; trips FR-3.5; trip selection FR-3.6; rev. 2026-11-10: time range FR-3.7)
+**Date:** 2026-09-14 (rev. 2026-10-17: clip length 1 / 3 / 5 min, FR-3.4 break rule; trips FR-3.5; trip selection FR-3.6; rev. 2026-11-10: time range FR-3.7; rev. 2026-11-22: trip trim FR-3.8)
 **Target platform:** Windows 10 / 11 (64-bit), fully offline
 **Source of requirements:** `merge-dashcam-camera-clips.md` (Claude skill) in this folder
 
@@ -200,6 +200,31 @@ uses a rule table plus a confirmation dialog.
     outside the range are never read by ffmpeg and never deleted (FR-12).
   - FR-3.7f GUI: if the boxes are changed after a Scan, Merge asks for a new Scan first,
     so what is merged is always what the table showed.
+- FR-3.8 Trip trim (GUI). The user SHALL be able to cut off the beginning
+  and/or end of one trip, e.g. a long stop while parked, without affecting other trips.
+  - FR-3.8a Every table row whose clips have filename timestamps has a **Trim** cell
+    reading *✂ Trip time* (*✂ Trimmed* once its trip is trimmed). Clicking it opens the
+    trim pop-up for that row's trip (all cameras of the trip number), so the Front and
+    the Rear row of a trip open the same pop-up; a click anywhere else on the row still
+    toggles the Export tick. Same as the Android app (AR-6.7).
+  - FR-3.8b The pop-up shows the trip's span, a timeline with one bar per camera (kept
+    clips highlighted, minute ticks from the trip start), and a **Start** and an **End**
+    slider over the trip. Each slider shows its position as date and time *and* as
+    minutes from the start of the detected trip (`2026-11-02 14:15:12   +12:02 min`,
+    end also `of 78:02`); `<` / `>` move it by one clip. A summary line shows what is
+    kept and cut ("Keeps 47:58 min, cuts 30:04 min (Front 16/26 files, Rear 16/26
+    files)"). Buttons *Whole trip* (reset), *OK*, *Cancel*.
+  - FR-3.8c Lossless, as FR-3.7b: the sliders snap to clip boundaries and whole clips
+    are merged. Boundaries of different cameras less than 5 s apart are one snap
+    point, so every camera is cut at the same clip.
+  - FR-3.8d After OK the trip's rows show the trimmed Files, Duration, Size, Start and
+    End, and a ✂ after the trip label. Trims apply to Merge; a new Scan clears them.
+    They combine with the FR-3.7 time range (both must hold). Trip numbers, file
+    names (FR-6.3, first and last merged clip) and the Export ticks are unchanged.
+  - FR-3.8e The plan summary and the report SHALL show one line per trimmed trip:
+    "Trimmed trip 2: 2026-11-02 14:15:10 to 15:03:12 (whole clips)". A camera with no
+    clip left in a trimmed trip gets a warning. Clips cut off are never read by
+    ffmpeg and never deleted (FR-12).
 
 ### FR-4 Codec consistency check
 - FR-4.1 Before merging a group, the tool SHALL run ffprobe on the first file, the
@@ -360,7 +385,7 @@ Single window, about 720×520 px, resizable.
 1. **Input folder** – entry + **Browse…** button.
 2. **Output folder** – entry, defaults to `<input>\merged`, + **Browse…**.
 3. **Scan** button → fills a table with one row per output file (per trip, FR-3.5d):
-   Export ☑/☐ | Camera | Trip | Files | Duration | Size | Start | End | Codec, with a
+   Export ☑/☐ | Camera | Trip | Trim | Files | Duration | Size | Start | End | Codec, with a
    vertical scrollbar, sorted by trip. Unclassified row if any. Click a row to tick or
    untick it; *Select all*, *Select none* and "Export N of M files" sit next to the
    Merge button (FR-3.6a).
@@ -371,7 +396,8 @@ Single window, about 720×520 px, resizable.
    FR-10.3); spinbox *Max part size (GB, 0 = unlimited)*. Third row: *Only merge from*
    [box] *to* [box] (`HH:MM` or `YYYY-MM-DD HH:MM`, empty = all), applied by Scan
    (FR-3.7).
-5. **Merge** button (enabled after a successful scan) and **Cancel** button.
+5. **Merge** button (enabled after a successful scan) and **Cancel** button. A row's
+   *✂ Trip time* cell trims that trip with Start/End sliders (FR-3.8).
 6. Progress area: one progress bar per camera group with percent, MB/s, ETA;
    a scrolling log pane below.
 7. Result panel with the report table (FR-9) and **Open output folder**.

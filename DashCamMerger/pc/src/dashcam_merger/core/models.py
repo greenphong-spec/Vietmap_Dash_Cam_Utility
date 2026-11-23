@@ -90,6 +90,7 @@ class OutputPart:
     trip_count: int = 1  # trips for this camera
     trip_part: int = 1  # 1-based part within the trip (codec change / max part size)
     trip_parts: int = 1  # parts in this trip
+    key: str = ""  # selection id (FR-3.6), stable when the part is trimmed; see part_key
 
 
 @dataclass(slots=True)
@@ -104,6 +105,7 @@ class MergePlan:
     ffmpeg_commands: list[list[str]] = field(default_factory=list)  # for --dry-run
     not_selected: list[OutputPart] = field(default_factory=list)  # FR-3.6, not exported
     time_range: str = ""  # FR-3.7, e.g. "2026-11-02 14:05 to 14:30"; "" = everything
+    trip_trims: list[str] = field(default_factory=list)  # FR-3.8, "trip 2: ... to ..."
 
 
 @dataclass(slots=True)
@@ -197,6 +199,9 @@ class RunOptions:  # everything the CLI/GUI can set per run
     # FR-3.7 time range; None = open end. Whole clips that overlap it are merged.
     time_from: TimePoint | None = None
     time_to: TimePoint | None = None
+    # FR-3.8 per-trip trim: trip number -> (start, end), applied to every camera of that
+    # trip on top of the time range. Whole clips that overlap the window are merged.
+    trip_ranges: dict[int, tuple[datetime, datetime]] | None = None
     max_part_gb: float | None = None
     reencode: bool = False
     overwrite: bool = False

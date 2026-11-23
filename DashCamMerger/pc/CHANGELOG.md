@@ -2,6 +2,33 @@
 
 All notable changes to DashCam Merger.
 
+## 1.2.0 — 2026-11-22
+
+### Added
+- **Trim a trip** (Spec FR-3.8), to leave a long stop (e.g. parked with the camera
+  running) at the start or end of a trip out of the merge. GUI only: click the *✂ Trip
+  time* cell (new Trim column) of any row of that trip. The pop-up has a timeline per camera and Start
+  / End sliders that show date + time and minutes from the trip start (`+12:02 min of
+  78:02`), snap to clip boundaries (lossless, whole clips) and step one clip with `<` /
+  `>`. Trimmed rows show the new Files/Duration/Size/Start/End, a ✂ after the trip and
+  *✂ Trimmed* in the Trim column; the plan and
+  `merge_report.txt` list each trimmed trip. A new Scan clears the trims. Core:
+  `RunOptions.trip_ranges`, `timerange.clip_window` / `describe_trim`,
+  `planner.clips_span`.
+
+### Changed
+- Export-selection keys (`planner.part_key`) now come from the untrimmed part, stored as
+  `OutputPart.key`, so trimming a trip (FR-3.7 range or FR-3.8 trim) keeps the ticks of
+  the scan. Rows that share a key tick together.
+- Main window default size 900×580 (was 760×560) for the extra Trim column. (An
+  earlier 1.2.0 draft opened the trim from an *Advanced: trim trips* checkbox + a click on
+  Start/End; replaced by the visible per-row button, as in the Android app.)
+
+### Not yet ported
+- Nothing: the FR-3.7 time range was ported in Android 1.8 (`core/TimeRange.kt`, spec
+  AR-6.6) and the FR-3.8 trip trim in Android 1.9 (`core/TripTrim.kt`, spec AR-6.7; a small
+  *✂ Trip time* button on every file of the Files tab, re-plans at once).
+
 ## 1.1.0 — 2026-11-10
 
 ### Added

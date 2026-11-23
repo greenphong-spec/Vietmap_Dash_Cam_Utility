@@ -207,3 +207,12 @@ def test_not_selected_listed_in_summary_and_report():
     assert line in build_plan_summary(plan)
     report = RunReport("r", plan, [], True, None, None)
     assert line in build_report_text(report)
+
+
+def test_plan_summary_lists_trip_trims(tmp_path):
+    from dashcam_merger.core.models import MergePlan
+    from dashcam_merger.core.report import build_plan_summary
+
+    plan = MergePlan(tmp_path, tmp_path / "merged", [], [], [], [], [],
+                     trip_trims=["trip 2: 2026-11-02 14:15:00 to 15:02:10"])
+    assert "Trimmed trip 2: 2026-11-02 14:15:00 to 15:02:10 (whole clips)" in build_plan_summary(plan)

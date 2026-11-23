@@ -81,6 +81,30 @@ def overlaps(clip: ClipInfo, begin: datetime | None, stop: datetime | None) -> b
     return begin is None or clip_end > begin
 
 
+SNAP_MARGIN = timedelta(seconds=1)
+
+
+def clip_window(first_start: datetime, last_end: datetime) -> tuple[datetime, datetime]:
+    """Trim window (FR-3.8) keeping the clips from the one starting at `first_start` to the
+    one ending at `last_end`.
+
+    Clip boundaries touch (or overlap by a few frames), so a window on the exact
+    boundaries would also catch the neighbouring clips; it is pulled in by a second.
+    """
+    begin, stop = first_start + SNAP_MARGIN, last_end - SNAP_MARGIN
+    if stop <= begin:  # a clip of under two seconds: keep its middle
+        middle = first_start + (last_end - first_start) / 2
+        begin, stop = middle, middle + timedelta(microseconds=1)
+    return begin, stop
+
+
+def describe_trim(trip: int, begin: datetime, stop: datetime) -> str:
+    """'trip 2: 2026-11-02 14:15:00 to 15:02:10' (FR-3.8)."""
+    fmt = "%Y-%m-%d %H:%M:%S"
+    short = "%H:%M:%S" if stop.date() == begin.date() else fmt
+    return f"trip {trip}: {begin.strftime(fmt)} to {stop.strftime(short)}"
+
+
 def describe(begin: datetime | None, stop: datetime | None) -> str:
     """'2026-11-02 14:05 to 14:30', 'from 2026-11-02 14:05', 'until 2026-11-02 14:30'."""
     fmt = "%Y-%m-%d %H:%M"
